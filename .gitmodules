@@ -1,0 +1,3 @@
+[submodule "External/RT.Util"]
+	path = External/RT.Util
+	url = git@github.com:RT-Projects/RT.Util.git
