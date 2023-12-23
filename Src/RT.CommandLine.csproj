@@ -9,6 +9,9 @@
     <Authors>Timwi;rstarkov</Authors>
     <Description>A command line parser that populates a class or a set of classes, with support for advanced help text formatting.</Description>
     <PackageTags>rt.commandline;command line;parser</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <IncludeSymbols>true</IncludeSymbols>
   </PropertyGroup>
 
   <ItemGroup>
