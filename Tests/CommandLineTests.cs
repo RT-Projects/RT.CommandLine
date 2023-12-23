@@ -1,8 +1,8 @@
 ﻿using Xunit;
 
-namespace RT.CommandLine.Lingo.Tests;
+namespace RT.CommandLine.Tests;
 
-public sealed class CmdLineLingoTests
+public sealed class CmdLineTests
 {
 #pragma warning disable 0649 // Field is never assigned to, and will always have its default value null
     private class commandLine
@@ -28,5 +28,19 @@ public sealed class CmdLineLingoTests
         c = CommandLineParser.Parse<commandLine>("--stuff stuff -- abc --stuff blah -- def".Split(' '));
         Assert.Equal("stuff", c.Stuff);
         Assert.True(c.Args.SequenceEqual(new[] { "abc", "--stuff", "blah", "--", "def" }));
+
+        try
+        {
+            CommandLineParser.Parse<commandLine>("--blah stuff".Split(' '));
+            Assert.Fail();
+        }
+        catch (CommandLineParseException e)
+        {
+            Assert.Equal("The specified command or option, --blah, is not recognized.", e.Message);
+            Assert.Equal("The specified command or option, --blah, is not recognized.", e.GetColoredMessage(new Translation()).ToString());
+            var tr = new Translation();
+            tr.UnrecognizedCommandOrOption = "Неизвестная опция или команда: {0}.";
+            Assert.Equal("Неизвестная опция или команда: --blah.", e.GetColoredMessage(tr).ToString());
+        }
     }
 }

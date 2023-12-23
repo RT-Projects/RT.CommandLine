@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SrcLingo\RT.CommandLine.Lingo.csproj" />
+    <ProjectReference Include="..\Src\RT.CommandLine.csproj" />
   </ItemGroup>
 
 </Project>
