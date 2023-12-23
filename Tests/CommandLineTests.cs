@@ -1,8 +1,7 @@
-﻿using NUnit.Framework;
+﻿using Xunit;
 
 namespace RT.CommandLine.Tests;
 
-[TestFixture]
 public sealed class CmdLineTests
 {
 #pragma warning disable 0649 // Field is never assigned to, and will always have its default value null
@@ -15,19 +14,19 @@ public sealed class CmdLineTests
     }
 #pragma warning restore 0649 // Field is never assigned to, and will always have its default value null
 
-    [Test]
+    [Fact]
     public static void Test()
     {
         var c = CommandLineParser.Parse<commandLine>("--stuff blah abc def".Split(' '));
-        Assert.AreEqual("blah", c.Stuff);
-        Assert.IsTrue(c.Args.SequenceEqual(new[] { "abc", "def" }));
+        Assert.Equal("blah", c.Stuff);
+        Assert.True(c.Args.SequenceEqual(new[] { "abc", "def" }));
 
         c = CommandLineParser.Parse<commandLine>("def --stuff thingy abc".Split(' '));
-        Assert.AreEqual("thingy", c.Stuff);
-        Assert.IsTrue(c.Args.SequenceEqual(new[] { "def", "abc" }));
+        Assert.Equal("thingy", c.Stuff);
+        Assert.True(c.Args.SequenceEqual(new[] { "def", "abc" }));
 
         c = CommandLineParser.Parse<commandLine>("--stuff stuff -- abc --stuff blah -- def".Split(' '));
-        Assert.AreEqual("stuff", c.Stuff);
-        Assert.IsTrue(c.Args.SequenceEqual(new[] { "abc", "--stuff", "blah", "--", "def" }));
+        Assert.Equal("stuff", c.Stuff);
+        Assert.True(c.Args.SequenceEqual(new[] { "abc", "--stuff", "blah", "--", "def" }));
     }
 }
