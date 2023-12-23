@@ -29,7 +29,7 @@ jobs:
               ver_suf = '';
             }
             core.exportVariable('VER_STR', ver_str);
-            core.exportVariable('VER_NUM', vs.formatVersion(`${majmin}.$(GitRevCount).$(RunNumber)`));
+            core.exportVariable('VER_NUM', vs.formatVersion(`${majmin}.$(GitRevCount)`));
             core.exportVariable('VER_SUF', ver_suf);
 
       - name: Install dotnet
@@ -46,6 +46,9 @@ jobs:
 
       - name: "dotnet pack: ${{ env.VER_STR }}"
         run: dotnet pack Src/RT.CommandLine.csproj --configuration Release -p:InformationalVersion="${{env.VER_STR}}" -p:VersionPrefix=${{env.VER_NUM}} -p:VersionSuffix=${{env.VER_SUF}} -p:FileVersion=${{env.VER_NUM}} -p:AssemblyVersion=${{env.VER_NUM}} -o Publish
+
+      - name: "dotnet pack Lingo: ${{ env.VER_STR }}"
+        run: dotnet pack SrcLingo/RT.CommandLine.Lingo.csproj --configuration Release -p:InformationalVersion="${{env.VER_STR}}" -p:VersionPrefix=${{env.VER_NUM}} -p:VersionSuffix=${{env.VER_SUF}} -p:FileVersion=${{env.VER_NUM}} -p:AssemblyVersion=${{env.VER_NUM}} -o Publish
 
       - name: Push to NuGet
         run: dotnet nuget push Publish/*.nupkg -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json
