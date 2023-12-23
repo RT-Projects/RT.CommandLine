@@ -1,6 +1,6 @@
 ﻿using Xunit;
 
-namespace RT.CommandLine.Tests;
+namespace RT.CommandLine.Lingo.Tests;
 
 public sealed class CmdLineTests
 {

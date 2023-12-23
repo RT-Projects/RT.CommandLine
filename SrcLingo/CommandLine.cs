@@ -8,7 +8,7 @@ using RT.Util.Consoles;
 using RT.Util.ExtensionMethods;
 using RT.Util.Text;
 
-namespace RT.CommandLine;
+namespace RT.CommandLine.Lingo;
 
 /// <summary>
 ///     Implements a command-line parser that can turn the commands and options specified by the user on the command line into
