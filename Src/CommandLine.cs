@@ -187,7 +187,7 @@ public static class CommandLineParser
     ///     on the command line.</returns>
     public static TArgs Parse<TArgs>(string[] args, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor = null)
     {
-        return (TArgs) parseCommandLine(getCommandInfo(typeof(TArgs)), args, 0, helpProcessor);
+        return (TArgs) parseCommandLine(getCommandInfo(typeof(TArgs)), args, 0, helpProcessor, false);
     }
 
     /// <summary>
@@ -359,7 +359,7 @@ public static class CommandLineParser
         return types.ToArray();
     }
 
-    private static object parseCommandLine(CommandInfo cmd, string[] args, int i, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
+    private static object parseCommandLine(CommandInfo cmd, string[] args, int i, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor, bool suppressValidation)
     {
         if (i < args.Length)
             if (args[i] == "-?" || args[i] == "/?" || args[i] == "--?" || args[i] == "/h" || args[i] == "--help" || args[i] == "-help" || args[i] == "help")
@@ -405,7 +405,7 @@ public static class CommandLineParser
                 if (positional is CmdLineSubcommand)
                 {
                     // Special case: recursive call
-                    ret = parseCommandLine(((CmdLineSubcommand) positional).Subcommand, args, i, helpProcessor);
+                    ret = parseCommandLine(((CmdLineSubcommand) positional).Subcommand, args, i, helpProcessor, suppressValidation || typeof(ICommandLineValidatable).IsAssignableFrom(cmd.Type));
                     i = args.Length;
                 }
                 else if (positional is CmdLineStringArrayPositional)
@@ -430,7 +430,7 @@ public static class CommandLineParser
             action(ret);
 
         ConsoleColoredString error = null;
-        if (typeof(ICommandLineValidatable).IsAssignableFrom(cmd.Type))
+        if (!suppressValidation && typeof(ICommandLineValidatable).IsAssignableFrom(cmd.Type))
             error = ((ICommandLineValidatable) ret).Validate();
 
         if (error != null)

@@ -1,32 +1,77 @@
-﻿using Xunit;
+﻿using RT.Util.Consoles;
+using Xunit;
 
 namespace RT.CommandLine.Tests;
 
 public sealed class CmdLineTests
 {
 #pragma warning disable 0649 // Field is never assigned to, and will always have its default value null
-    private class CommandLine1
+    private class CommandLineWithOption
     {
         [IsPositional, IsMandatory]
         public string Arg;
         [Option("-o")]
         public string Option;
     }
-    private class CommandLine2
+    private class CommandLineWithArray
     {
         [Option("--stuff")]
         public string Stuff;
         [IsPositional]
         public string[] Args;
     }
+
+    [CommandLine]
+    abstract class CmdBase1 : ICommandLineValidatable
+    {
+        [IsPositional, IsMandatory]
+        public string Base;
+
+        public static int ValidateCalled = 0;
+
+        public ConsoleColoredString Validate()
+        {
+            ValidateCalled++;
+            return null;
+        }
+    }
+
+    [CommandName("sub")]
+    sealed class CmdSubcmd1 : CmdBase1
+    {
+        [IsPositional, IsMandatory]
+        public string ItemName;
+    }
+
+    [CommandLine]
+    abstract class CmdBase2
+    {
+        [IsPositional, IsMandatory]
+        public string Base;
+    }
+
+    [CommandName("sub")]
+    sealed class CmdSubcmd2 : CmdBase2, ICommandLineValidatable
+    {
+        [IsPositional, IsMandatory]
+        public string ItemName;
+
+        public static int ValidateCalled = 0;
+
+        public ConsoleColoredString Validate()
+        {
+            ValidateCalled++;
+            return null;
+        }
+    }
 #pragma warning restore 0649 // Field is never assigned to, and will always have its default value null
 
     [Fact]
-    public static void Test()
+    public static void TestMinusMinus()
     {
         try
         {
-            CommandLineParser.Parse<CommandLine1>([]);
+            CommandLineParser.Parse<CommandLineWithOption>([]);
             Assert.Fail();
         }
         catch (CommandLineParseException e)
@@ -35,7 +80,7 @@ public sealed class CmdLineTests
         }
         try
         {
-            CommandLineParser.Parse<CommandLine1>(["-o", "Option"]);
+            CommandLineParser.Parse<CommandLineWithOption>(["-o", "Option"]);
             Assert.Fail();
         }
         catch (CommandLineParseException e)
@@ -43,38 +88,45 @@ public sealed class CmdLineTests
             Assert.Equal("The parameter <Arg> is mandatory and must be specified.", e.Message);
         }
 
-        var c1 = CommandLineParser.Parse<CommandLine1>(["Arg"]);
-        Assert.Equal("Arg", c1.Arg);
-        Assert.Null(c1.Option);
+        var c = CommandLineParser.Parse<CommandLineWithOption>(["Arg"]);
+        Assert.Equal("Arg", c.Arg);
+        Assert.Null(c.Option);
 
-        c1 = CommandLineParser.Parse<CommandLine1>(["-o", "Arg1", "Arg2"]);
-        Assert.Equal("Arg1", c1.Option);
-        Assert.Equal("Arg2", c1.Arg);
+        c = CommandLineParser.Parse<CommandLineWithOption>(["-o", "Arg1", "Arg2"]);
+        Assert.Equal("Arg1", c.Option);
+        Assert.Equal("Arg2", c.Arg);
 
-        c1 = CommandLineParser.Parse<CommandLine1>(["Arg1", "-o", "Arg2"]);
-        Assert.Equal("Arg1", c1.Arg);
-        Assert.Equal("Arg2", c1.Option);
+        c = CommandLineParser.Parse<CommandLineWithOption>(["Arg1", "-o", "Arg2"]);
+        Assert.Equal("Arg1", c.Arg);
+        Assert.Equal("Arg2", c.Option);
 
-        c1 = CommandLineParser.Parse<CommandLine1>(["--", "-o"]);
-        Assert.Equal("-o", c1.Arg);
-        Assert.Null(c1.Option);
+        c = CommandLineParser.Parse<CommandLineWithOption>(["--", "-o"]);
+        Assert.Equal("-o", c.Arg);
+        Assert.Null(c.Option);
+    }
 
+    [Fact]
+    public static void TestArrays()
+    {
+        var c = CommandLineParser.Parse<CommandLineWithArray>("--stuff blah abc def".Split(' '));
+        Assert.Equal("blah", c.Stuff);
+        Assert.True(c.Args.SequenceEqual(["abc", "def"]));
 
-        var c2 = CommandLineParser.Parse<CommandLine2>("--stuff blah abc def".Split(' '));
-        Assert.Equal("blah", c2.Stuff);
-        Assert.True(c2.Args.SequenceEqual(["abc", "def"]));
+        c = CommandLineParser.Parse<CommandLineWithArray>("def --stuff thingy abc".Split(' '));
+        Assert.Equal("thingy", c.Stuff);
+        Assert.True(c.Args.SequenceEqual(["def", "abc"]));
 
-        c2 = CommandLineParser.Parse<CommandLine2>("def --stuff thingy abc".Split(' '));
-        Assert.Equal("thingy", c2.Stuff);
-        Assert.True(c2.Args.SequenceEqual(["def", "abc"]));
+        c = CommandLineParser.Parse<CommandLineWithArray>("--stuff stuff -- abc --stuff blah -- def".Split(' '));
+        Assert.Equal("stuff", c.Stuff);
+        Assert.True(c.Args.SequenceEqual(["abc", "--stuff", "blah", "--", "def"]));
+    }
 
-        c2 = CommandLineParser.Parse<CommandLine2>("--stuff stuff -- abc --stuff blah -- def".Split(' '));
-        Assert.Equal("stuff", c2.Stuff);
-        Assert.True(c2.Args.SequenceEqual(["abc", "--stuff", "blah", "--", "def"]));
-
+    [Fact]
+    public static void TestInvalidOptionAndLingo()
+    {
         try
         {
-            CommandLineParser.Parse<CommandLine2>("--blah stuff".Split(' '));
+            CommandLineParser.Parse<CommandLineWithArray>("--blah stuff".Split(' '));
             Assert.Fail();
         }
         catch (CommandLineParseException e)
@@ -85,5 +137,25 @@ public sealed class CmdLineTests
             tr.UnrecognizedCommandOrOption = "Неизвестная опция или команда: {0}.";
             Assert.Equal("Неизвестная опция или команда: --blah.", e.GetColoredMessage(tr).ToString());
         }
+    }
+
+    [Fact]
+    public static void TestSubcommandValidation()
+    {
+        CmdBase1.ValidateCalled = 0;
+        var c = CommandLineParser.Parse<CmdBase1>(["base", "sub", "item"]);
+        Assert.IsType<CmdSubcmd1>(c);
+        var cs1 = (CmdSubcmd1) c;
+        Assert.Equal("base", cs1.Base);
+        Assert.Equal("item", cs1.ItemName);
+        Assert.Equal(1, CmdBase1.ValidateCalled);
+
+        CmdSubcmd2.ValidateCalled = 0;
+        var c2 = CommandLineParser.Parse<CmdBase2>(["base", "sub", "item"]);
+        Assert.IsType<CmdSubcmd2>(c2);
+        var cs2 = (CmdSubcmd2) c2;
+        Assert.Equal("base", cs2.Base);
+        Assert.Equal("item", cs2.ItemName);
+        Assert.Equal(1, CmdSubcmd2.ValidateCalled);
     }
 }
