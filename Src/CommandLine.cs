@@ -338,18 +338,13 @@ public static class CommandLineParser
     {
         var bindingFlags = BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
-        // Get all fields from the type
-        var fields = type.GetFields(bindingFlags).ToList();
+        // Include this type, plus all base types in the chain until we find one with CommandNameAttribute or CommandLineAttribute
+        var types = type.SelectChain(t => t.BaseType)
+            .TakeWhile(t => t == type || (t != typeof(object) && !t.IsDefined<CommandNameAttribute>() && !t.IsDefined<CommandLineAttribute>()));
+        // Starting with the deepest base type, get all fields from all the above types
+        var fields = types.Reverse().SelectMany(t => t.GetFields(bindingFlags)).ToArray();
 
-        // Keep adding fields from the base type until we find one with CommandNameAttribute or CommandLineAttribute
-        var testType = type.BaseType;
-        while (testType != typeof(object) && !testType.IsDefined<CommandNameAttribute>() && !testType.IsDefined<CommandLineAttribute>())
-        {
-            fields.AddRange(testType.GetFields(bindingFlags));
-            testType = testType.BaseType;
-        }
-
-        return fields.ToArray();
+        return fields;
     }
 
     private static Type[] getDirectSubcommands(Type type)

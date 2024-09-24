@@ -64,6 +64,26 @@ public sealed class CmdLineTests
             return null;
         }
     }
+
+    [CommandLine]
+    abstract class CmdBase3
+    {
+        [IsPositional, IsMandatory]
+        public string Base;
+    }
+
+    abstract class CmdSubBase3 : CmdBase3
+    {
+        [IsPositional, IsMandatory]
+        public string SubBase;
+    }
+
+    [CommandName("sub")]
+    sealed class CmdSubcmd3 : CmdSubBase3
+    {
+        [IsPositional, IsMandatory]
+        public string ItemName;
+    }
 #pragma warning restore 0649 // Field is never assigned to, and will always have its default value null
 
     [Fact]
@@ -157,5 +177,16 @@ public sealed class CmdLineTests
         Assert.Equal("base", cs2.Base);
         Assert.Equal("item", cs2.ItemName);
         Assert.Equal(1, CmdSubcmd2.ValidateCalled);
+    }
+
+    [Fact]
+    public static void TestSubcommandIntermediate()
+    {
+        var c3 = CommandLineParser.Parse<CmdBase3>(["base", "sub", "subbase", "item"]);
+        Assert.IsType<CmdSubcmd3>(c3);
+        var cs3 = (CmdSubcmd3) c3;
+        Assert.Equal("base", cs3.Base);
+        Assert.Equal("subbase", cs3.SubBase);
+        Assert.Equal("item", cs3.ItemName);
     }
 }
