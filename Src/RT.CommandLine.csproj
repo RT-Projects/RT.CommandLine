@@ -16,8 +16,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-    <PackageReference Include="RT.PostBuild" Version="2.0.1761" />
-    <PackageReference Include="RT.Util.Core" Version="2.0.1761" />
+    <PackageReference Include="RT.PostBuild" Version="2.0.1770" />
+    <PackageReference Include="RT.Util.Core" Version="2.0.1770" />
   </ItemGroup>
 
   <ItemGroup>

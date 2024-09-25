@@ -1,8 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Reflection;
+﻿using System.Reflection;
+using RT.Internal;
+using RT.PostBuild;
+using RT.Util;
 using RT.Util.Consoles;
 using RT.Util.ExtensionMethods;
 using RT.Util.Text;
@@ -144,19 +143,15 @@ public static class CommandLineParser
     ///     The class containing the fields and attributes which define the command-line syntax.</typeparam>
     /// <param name="args">
     ///     The command-line arguments to be parsed.</param>
-    /// <param name="applicationTr">
-    ///     Specifies the application’s translation object which contains the localised strings that document the command-line
-    ///     options and commands. This object is passed in to the <c>FieldNameDoc</c> methods described in the documentation
-    ///     for <see cref="CommandLineParser"/>. This should be <c>null</c> for monoligual applications.</param>
     /// <param name="helpProcessor">
     ///     Specifies a callback which is invoked on every documentation string retrieved from the <see
     ///     cref="DocumentationAttribute"/>s to generate the help text. This callback can modify the text arbitrarily.</param>
     /// <returns>
     ///     An instance of the class <typeparamref name="TArgs"/> containing the options and parameters specified by the user
     ///     on the command line.</returns>
-    public static TArgs Parse<TArgs>(string[] args, TranslationBase applicationTr = null, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor = null)
+    public static TArgs Parse<TArgs>(string[] args, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor = null)
     {
-        return (TArgs) parseCommandLine(args, typeof(TArgs), 0, applicationTr, helpProcessor);
+        return (TArgs) parseCommandLine(args, typeof(TArgs), 0, helpProcessor);
     }
 
     /// <summary>
@@ -167,21 +162,17 @@ public static class CommandLineParser
     ///     The class containing the fields and attributes which define the command-line syntax.</typeparam>
     /// <param name="args">
     ///     The command-line arguments to be parsed.</param>
-    /// <param name="applicationTr">
-    ///     Specifies the application’s translation object which contains the localised strings that document the command-line
-    ///     options and commands. This object is passed in to the FieldNameDoc() methods described in the documentation for
-    ///     <see cref="CommandLineParser"/>. This should be null for monoligual applications.</param>
     /// <param name="helpProcessor">
     ///     Specifies a callback which is invoked on every documentation string retrieved from the <see
     ///     cref="DocumentationAttribute"/>s to generate the help text. This callback can modify the text arbitrarily.</param>
     /// <returns>
     ///     An instance of the class <typeparamref name="TArgs"/> containing the options and parameters specified by the user
     ///     on the command line.</returns>
-    public static TArgs ParseOrWriteUsageToConsole<TArgs>(string[] args, TranslationBase applicationTr = null, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor = null)
+    public static TArgs ParseOrWriteUsageToConsole<TArgs>(string[] args, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor = null)
     {
         try
         {
-            return (TArgs) parseCommandLine(args, typeof(TArgs), 0, applicationTr, helpProcessor);
+            return (TArgs) parseCommandLine(args, typeof(TArgs), 0, helpProcessor);
         }
         catch (CommandLineParseException e)
         {
@@ -200,12 +191,6 @@ public static class CommandLineParser
     ///     Generates the help screen for this command line.</summary>
     /// <typeparam name="TArgs">
     ///     The class containing the fields and attributes which define the command-line syntax.</typeparam>
-    /// <param name="applicationTr">
-    ///     Specifies the application’s translation object which contains the localised strings that document the command-line
-    ///     options and commands. This object is passed in to the <c>FieldNameDoc</c> methods described in the documentation
-    ///     for <see cref="CommandLineParser"/>. This should be <c>null</c> for monoligual applications.</param>
-    /// <param name="commandLineTr">
-    ///     The instance containing the translation of <see cref="CommandLineParser"/>’s own text, or <c>null</c> for English.</param>
     /// <param name="wrapWidth">
     ///     The character width at which the output should be word-wrapped. The default (<c>null</c>) uses <see
     ///     cref="ConsoleUtil.WrapToWidth"/>.</param>
@@ -215,16 +200,16 @@ public static class CommandLineParser
     /// <param name="helpProcessor">
     ///     Specifies a callback which is invoked on every documentation string retrieved from the <see
     ///     cref="DocumentationAttribute"/>s to generate the help text. This callback can modify the text arbitrarily.</param>
-    public static ConsoleColoredString GenerateHelp<TArgs>(TranslationBase applicationTr = null, Translation commandLineTr = null, int? wrapWidth = null, Type subType = null, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor = null)
+    public static ConsoleColoredString GenerateHelp<TArgs>(int? wrapWidth = null, Type subType = null, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor = null)
     {
-        return getHelpGenerator(subType ?? typeof(TArgs), applicationTr, helpProcessor)(commandLineTr, wrapWidth ?? ConsoleUtil.WrapToWidth());
+        return getHelpGenerator(subType ?? typeof(TArgs), helpProcessor)(wrapWidth ?? ConsoleUtil.WrapToWidth());
     }
 
-    private static object parseCommandLine(string[] args, Type type, int i, TranslationBase applicationTr, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
+    private static object parseCommandLine(string[] args, Type type, int i, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
     {
         if (i < args.Length)
             if (args[i] == "-?" || args[i] == "/?" || args[i] == "--?" || args[i] == "/h" || args[i] == "--help" || args[i] == "-help" || args[i] == "help")
-                throw new CommandLineHelpRequestedException(getHelpGenerator(type, applicationTr, helpProcessor));
+                throw new CommandLineHelpRequestedException(getHelpGenerator(type, helpProcessor));
 
         var ret = Activator.CreateInstance(type, true);
         var options = new Dictionary<string, Action>();
@@ -274,12 +259,12 @@ public static class CommandLineParser
                                     return;
                                 }
                             }
-                            throw new UnrecognizedCommandOrOptionException(args[i], getHelpGenerator(type, applicationTr, helpProcessor));
+                            throw new UnrecognizedCommandOrOptionException(args[i], getHelpGenerator(type, helpProcessor));
                         },
                         ProcessEndOfParameters = () =>
                         {
                             if (mandatory)
-                                throw new MissingParameterException(field, null, false, getHelpGenerator(type, applicationTr, helpProcessor));
+                                throw new MissingParameterException(field, null, false, getHelpGenerator(type, helpProcessor));
                         }
                     });
                 }
@@ -293,7 +278,7 @@ public static class CommandLineParser
                     var infos = option == null
                         ? field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public).Select(enumField => new
                         {
-                            Options = enumField.GetOrderedOptionAttributeNames(),
+                            Options = enumField.GetOrderedOptionAttributeNames().ToArray(),
                             NeedCommandName = false,
                             GetEnumValue = Ut.Lambda((string commandName) => enumField.GetRawConstantValue())
                         })
@@ -306,7 +291,7 @@ public static class CommandLineParser
                                 var enumField = field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public)
                                     .FirstOrDefault(ef => ef.GetCustomAttributes<CommandNameAttribute>().Any(cna => cna.Names.Contains(commandName)));
                                 if (enumField == null)
-                                    throw new UnrecognizedCommandOrOptionException(commandName, getHelpGenerator(type, applicationTr, helpProcessor));
+                                    throw new UnrecognizedCommandOrOptionException(commandName, getHelpGenerator(type, helpProcessor));
                                 return enumField.GetRawConstantValue();
                             })
                         }).AsEnumerable();
@@ -330,7 +315,7 @@ public static class CommandLineParser
                                 if (inf.NeedCommandName)
                                 {
                                     if (i >= args.Length)
-                                        throw new IncompleteOptionException(o, getHelpGenerator(type, applicationTr, helpProcessor));
+                                        throw new IncompleteOptionException(o, getHelpGenerator(type, helpProcessor));
                                     commandName = args[i];
                                     i++;
                                 }
@@ -352,7 +337,7 @@ public static class CommandLineParser
                                     else
                                     {
                                         // Since only a single value is allowed, throw an error if another value is specified later
-                                        throw new IncompatibleCommandOrOptionException(prevOptionOrCommand, commandName ?? o, getHelpGenerator(type, applicationTr, helpProcessor));
+                                        throw new IncompatibleCommandOrOptionException(prevOptionOrCommand, commandName ?? o, getHelpGenerator(type, helpProcessor));
                                     }
                                 }
                                 else
@@ -385,7 +370,7 @@ public static class CommandLineParser
                         ProcessParameter = () =>
                         {
                             if (!convertStringAndSetField(args[i], ret, field))
-                                throw new InvalidNumericParameterException(field.Name, getHelpGenerator(type, applicationTr, helpProcessor));
+                                throw new InvalidNumericParameterException(field.Name, getHelpGenerator(type, helpProcessor));
 
                             positionals.RemoveAt(0);
                             missingMandatories.Remove(field);
@@ -394,7 +379,7 @@ public static class CommandLineParser
                         ProcessEndOfParameters = () =>
                         {
                             if (mandatory)
-                                throw new MissingParameterException(field, null, false, getHelpGenerator(type, applicationTr, helpProcessor));
+                                throw new MissingParameterException(field, null, false, getHelpGenerator(type, helpProcessor));
                         }
                     });
                 }
@@ -407,10 +392,10 @@ public static class CommandLineParser
                         {
                             i++;
                             if (i >= args.Length)
-                                throw new IncompleteOptionException(o, getHelpGenerator(type, applicationTr, helpProcessor));
+                                throw new IncompleteOptionException(o, getHelpGenerator(type, helpProcessor));
 
                             if (!convertStringAndSetField(args[i], ret, field))
-                                throw new InvalidNumericParameterException(field.Name, getHelpGenerator(type, applicationTr, helpProcessor));
+                                throw new InvalidNumericParameterException(field.Name, getHelpGenerator(type, helpProcessor));
 
                             i++;
                             missingMandatories.Remove(field);
@@ -452,7 +437,7 @@ public static class CommandLineParser
                         {
                             i++;
                             if (i >= args.Length)
-                                throw new IncompleteOptionException(o, getHelpGenerator(type, applicationTr, helpProcessor));
+                                throw new IncompleteOptionException(o, getHelpGenerator(type, helpProcessor));
                             prev = (prev == null || prev.Length == 0)
                                 ? new string[] { args[i] }
                                 : prev.Concat(args[i]).ToArray();
@@ -476,16 +461,16 @@ public static class CommandLineParser
                         foreach (var subclass in field.FieldType.Assembly.GetTypes().Where(t => !t.IsAbstract && t.IsSubclassOf(field.FieldType)))
                             if (subclass.GetCustomAttributes<CommandNameAttribute>().First().Names.Any(c => c.Equals(args[i], StringComparison.OrdinalIgnoreCase)))
                             {
-                                field.SetValue(ret, parseCommandLine(args, subclass, i + 1, applicationTr, helpProcessor));
+                                field.SetValue(ret, parseCommandLine(args, subclass, i + 1, helpProcessor));
                                 i = args.Length;
                                 return;
                             }
-                        throw new UnrecognizedCommandOrOptionException(args[i], getHelpGenerator(type, applicationTr, helpProcessor));
+                        throw new UnrecognizedCommandOrOptionException(args[i], getHelpGenerator(type, helpProcessor));
                     },
                     ProcessEndOfParameters = () =>
                     {
                         if (mandatory)
-                            throw new MissingParameterException(field, null, false, getHelpGenerator(type, applicationTr, helpProcessor));
+                            throw new MissingParameterException(field, null, false, getHelpGenerator(type, helpProcessor));
                     }
                 });
             }
@@ -508,12 +493,12 @@ public static class CommandLineParser
                 if (options.ContainsKey(args[i]))
                     options[args[i]]();
                 else
-                    throw new UnrecognizedCommandOrOptionException(args[i], getHelpGenerator(type, applicationTr, helpProcessor));
+                    throw new UnrecognizedCommandOrOptionException(args[i], getHelpGenerator(type, helpProcessor));
             }
             else
             {
                 if (positionals.Count == 0)
-                    throw new UnexpectedArgumentException(args.Subarray(i), getHelpGenerator(type, applicationTr, helpProcessor));
+                    throw new UnexpectedArgumentException(args.Subarray(i), getHelpGenerator(type, helpProcessor));
                 positionals[0].ProcessParameter();
             }
         }
@@ -522,32 +507,14 @@ public static class CommandLineParser
             positionals[0].ProcessEndOfParameters();
 
         if (missingMandatories.Count > 0)
-            throw new MissingParameterException(missingMandatories[0], swallowingField, !missingMandatories[0].IsDefined<IsPositionalAttribute>(), getHelpGenerator(type, applicationTr, helpProcessor));
+            throw new MissingParameterException(missingMandatories[0], swallowingField, !missingMandatories[0].IsDefined<IsPositionalAttribute>(), getHelpGenerator(type, helpProcessor));
 
-        Type[] typeParam;
         ConsoleColoredString error = null;
-        if (type.TryGetInterfaceGenericParameters(typeof(ICommandLineValidatable<>), out typeParam))
-        {
-            var tp = typeof(ICommandLineValidatable<>).MakeGenericType(typeParam[0]);
-            if (typeParam[0] != applicationTr.GetType())
-                throw new CommandLineValidationException(@"The type {0} implements {1}, but ApplicationTr is of type {2}. If ApplicationTr is right, the interface implemented should be {3}.".Fmt(
-                    type.FullName,
-                    tp.FullName,
-                    applicationTr.GetType().FullName,
-                    typeof(ICommandLineValidatable<>).MakeGenericType(applicationTr.GetType()).FullName
-                ), getHelpGenerator(type, applicationTr, helpProcessor));
-
-            var meth = tp.GetMethod("Validate");
-            if (meth == null || !meth.GetParameters().Select(p => p.ParameterType).SequenceEqual(new Type[] { typeParam[0] }))
-                throw new CommandLineValidationException(@"Couldn’t find the Validate method in the {0} type.".Fmt(tp.FullName), getHelpGenerator(type, applicationTr, helpProcessor));
-
-            error = (ConsoleColoredString) meth.Invoke(ret, new object[] { applicationTr });
-        }
-        else if (typeof(ICommandLineValidatable).IsAssignableFrom(type))
+        if (typeof(ICommandLineValidatable).IsAssignableFrom(type))
             error = ((ICommandLineValidatable) ret).Validate();
 
         if (error != null)
-            throw new CommandLineValidationException(error, getHelpGenerator(type, applicationTr, helpProcessor));
+            throw new CommandLineValidationException(error, getHelpGenerator(type, helpProcessor));
 
         return ret;
     }
@@ -570,14 +537,11 @@ public static class CommandLineParser
         return true;
     }
 
-    private static Func<Translation, int, ConsoleColoredString> getHelpGenerator(Type type, TranslationBase applicationTr, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
+    private static Func<int, ConsoleColoredString> getHelpGenerator(Type type, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
     {
         helpProcessor = helpProcessor ?? (s => s);
-        return (tr, wrapWidth) =>
+        return wrapWidth =>
         {
-            if (tr == null)
-                tr = new Translation();
-
             int leftMargin = 3;
 
             var helpString = new List<ConsoleColoredString>();
@@ -588,7 +552,7 @@ public static class CommandLineParser
             //  ##  CONSTRUCT THE “USAGE” LINE
             //
             var usage = new List<ConsoleColoredString>();
-            usage.Add(new ConsoleColoredString(tr.Usage + " ", CmdLineColor.UsageLinePrefix));
+            usage.Add(new ConsoleColoredString("Usage: ", CmdLineColor.UsageLinePrefix));
             usage.Add(commandName);
 
             List<FieldInfo> optionalOptions, mandatoryOptions, optionalPositional, mandatoryPositional;
@@ -606,7 +570,7 @@ public static class CommandLineParser
                     .JoinColoredString());
 
             // Word-wrap the usage line
-            foreach (var line in new ConsoleColoredString(usage.ToArray()).WordWrap(wrapWidth, tr.Usage.Translation.Length + 1))
+            foreach (var line in new ConsoleColoredString(usage.ToArray()).WordWrap(wrapWidth, "Usage: ".Length))
             {
                 helpString.Add(line);
                 helpString.Add(ConsoleColoredString.NewLine);
@@ -621,15 +585,15 @@ public static class CommandLineParser
             var requiredParamsTable = new TextTable { MaxWidth = wrapWidth - leftMargin, ColumnSpacing = 3, RowSpacing = 1, LeftMargin = leftMargin };
             int requiredRow = 0;
             foreach (var f in mandatoryPositional.Select(fld => new { Positional = true, Field = fld }).Concat(mandatoryOptions.Select(fld => new { Positional = false, Field = fld })))
-                anyCommandsWithSuboptions |= createParameterHelpRow(ref requiredRow, requiredParamsTable, f.Field, f.Positional, type, applicationTr, helpProcessor);
+                anyCommandsWithSuboptions |= createParameterHelpRow(ref requiredRow, requiredParamsTable, f.Field, f.Positional, type, helpProcessor);
 
             var optionalParamsTable = new TextTable { MaxWidth = wrapWidth - leftMargin, ColumnSpacing = 3, RowSpacing = 1, LeftMargin = leftMargin };
             int optionalRow = 0;
             foreach (var f in optionalPositional.Select(fld => new { Positional = true, Field = fld }).Concat(optionalOptions.Select(fld => new { Positional = false, Field = fld })))
-                anyCommandsWithSuboptions |= createParameterHelpRow(ref optionalRow, optionalParamsTable, f.Field, f.Positional, type, applicationTr, helpProcessor);
+                anyCommandsWithSuboptions |= createParameterHelpRow(ref optionalRow, optionalParamsTable, f.Field, f.Positional, type, helpProcessor);
 
             // Word-wrap the documentation for the command (if any)
-            var doc = getDocumentation(type, type, applicationTr, helpProcessor);
+            var doc = getDocumentation(type, type, helpProcessor);
             foreach (var line in doc.WordWrap(wrapWidth))
             {
                 helpString.Add(line);
@@ -640,7 +604,7 @@ public static class CommandLineParser
             if (mandatoryOptions.Any() || mandatoryPositional.Any())
             {
                 helpString.Add(ConsoleColoredString.NewLine);
-                helpString.Add(new ConsoleColoredString(tr.ParametersHeader, CmdLineColor.HelpHeading));
+                helpString.Add(new ConsoleColoredString("Required parameters:", CmdLineColor.HelpHeading));
                 helpString.Add(ConsoleColoredString.NewLine);
                 helpString.Add(ConsoleColoredString.NewLine);
                 requiredParamsTable.RemoveEmptyColumns();
@@ -651,7 +615,7 @@ public static class CommandLineParser
             if (optionalOptions.Any() || optionalPositional.Any())
             {
                 helpString.Add(ConsoleColoredString.NewLine);
-                helpString.Add(new ConsoleColoredString(tr.OptionsHeader, CmdLineColor.HelpHeading));
+                helpString.Add(new ConsoleColoredString("Optional parameters:", CmdLineColor.HelpHeading));
                 helpString.Add(ConsoleColoredString.NewLine);
                 helpString.Add(ConsoleColoredString.NewLine);
                 optionalParamsTable.RemoveEmptyColumns();
@@ -662,7 +626,7 @@ public static class CommandLineParser
             if (anyCommandsWithSuboptions)
             {
                 helpString.Add(ConsoleColoredString.NewLine);
-                foreach (var line in (new ConsoleColoredString("* ", CmdLineColor.SubcommandsPresentAsterisk) + ConsoleColoredString.FromEggsNode(EggsML.Parse(tr.AdditionalOptions.Translation))).WordWrap(wrapWidth, 2))
+                foreach (var line in (new ConsoleColoredString("* ", CmdLineColor.SubcommandsPresentAsterisk) + ConsoleColoredString.FromEggsNode(EggsML.Parse("This command accepts further arguments on the command line. Type the command followed by *-?* or *help* to list them."))).WordWrap(wrapWidth, 2))
                 {
                     helpString.Add(line);
                     helpString.Add(ConsoleColoredString.NewLine);
@@ -673,7 +637,7 @@ public static class CommandLineParser
         };
     }
 
-    private static bool createParameterHelpRow(ref int row, TextTable table, FieldInfo field, bool positional, Type type, TranslationBase applicationTr, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
+    private static bool createParameterHelpRow(ref int row, TextTable table, FieldInfo field, bool positional, Type type, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
     {
         var anyCommandsWithSuboptions = false;
         var cmdName = "<".Color(CmdLineColor.FieldBrackets) + field.Name.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets);
@@ -684,7 +648,7 @@ public static class CommandLineParser
             if (positional)
             {
                 var topRow = row;
-                var doc = getDocumentation(field, type, applicationTr, helpProcessor);
+                var doc = getDocumentation(field, type, helpProcessor);
                 if (doc.Length > 0 || field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public).All(el => el.IsDefined<UndocumentedAttribute>() || !el.GetCustomAttributes<CommandNameAttribute>().Any()))
                 {
                     table.SetCell(2, row, doc, colSpan: 4);
@@ -699,7 +663,7 @@ public static class CommandLineParser
                         continue;
                     table.SetCell(2, row, attr.Names.Where(n => n.Length <= 2).Select(s => s.Color(CmdLineColor.EnumValue)).JoinColoredString(", "), noWrap: true);
                     table.SetCell(3, row, attr.Names.Where(n => n.Length > 2).Select(s => s.Color(CmdLineColor.EnumValue)).JoinColoredString(Environment.NewLine), noWrap: true);
-                    table.SetCell(4, row, getDocumentation(el, type, applicationTr, helpProcessor), colSpan: 2);
+                    table.SetCell(4, row, getDocumentation(el, type, helpProcessor), colSpan: 2);
                     row++;
                 }
                 table.SetCell(0, topRow, cmdName, noWrap: true, colSpan: 2, rowSpan: row - topRow);
@@ -716,14 +680,14 @@ public static class CommandLineParser
                         continue;
                     table.SetCell(3, row, attr.Names.Where(n => n.Length <= 2).Select(s => s.Color(CmdLineColor.EnumValue)).JoinColoredString(", "), noWrap: true);
                     table.SetCell(4, row, attr.Names.Where(n => n.Length > 2).Select(s => s.Color(CmdLineColor.EnumValue)).JoinColoredString(Environment.NewLine), noWrap: true);
-                    table.SetCell(5, row, getDocumentation(el, type, applicationTr, helpProcessor));
+                    table.SetCell(5, row, getDocumentation(el, type, helpProcessor));
                     row++;
                 }
                 if (row == topRow + 1)
                     throw new InvalidOperationException("Enum type {2}.{3} has no values (apart from default value for field {0}.{1}).".Fmt(field.DeclaringType.FullName, field.Name, field.FieldType.DeclaringType.FullName, field.FieldType));
                 table.SetCell(0, topRow, field.GetOrderedOptionAttributeNames().Where(o => !o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(", "), noWrap: true, rowSpan: row - topRow);
                 table.SetCell(1, topRow, field.GetOrderedOptionAttributeNames().Where(o => o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(Environment.NewLine), noWrap: true, rowSpan: row - topRow);
-                table.SetCell(2, topRow, getDocumentation(field, type, applicationTr, helpProcessor), colSpan: 4);
+                table.SetCell(2, topRow, getDocumentation(field, type, helpProcessor), colSpan: 4);
                 table.SetCell(2, topRow + 1, cmdName, noWrap: true, rowSpan: row - topRow - 1);
             }
             // ### ENUM fields, “-x” scheme
@@ -733,7 +697,7 @@ public static class CommandLineParser
                 {
                     table.SetCell(0, row, el.GetOrderedOptionAttributeNames().Where(o => !o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(", "), noWrap: true);
                     table.SetCell(1, row, el.GetOrderedOptionAttributeNames().Where(o => o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(Environment.NewLine), noWrap: true);
-                    table.SetCell(2, row, getDocumentation(el, type, applicationTr, helpProcessor), colSpan: 4);
+                    table.SetCell(2, row, getDocumentation(el, type, helpProcessor), colSpan: 4);
                     row++;
                 }
             }
@@ -754,7 +718,7 @@ public static class CommandLineParser
                 var names = ty.GetCustomAttributes<CommandNameAttribute>().First().Names;
                 table.SetCell(2, row, names.Where(n => n.Length <= 2).Select(n => n.Color(CmdLineColor.Command) + asterisk).JoinColoredString(", "), noWrap: true);
                 table.SetCell(3, row, names.Where(n => n.Length > 2).Select(n => n.Color(CmdLineColor.Command) + asterisk).JoinColoredString(Environment.NewLine), noWrap: true);
-                table.SetCell(4, row, getDocumentation(ty, ty, applicationTr, helpProcessor), colSpan: 2);
+                table.SetCell(4, row, getDocumentation(ty, ty, helpProcessor), colSpan: 2);
                 row++;
             }
             table.SetCell(0, origRow, cmdName, colSpan: 2, rowSpan: row - origRow, noWrap: true);
@@ -763,7 +727,7 @@ public static class CommandLineParser
         else if (positional)
         {
             table.SetCell(0, row, cmdName, noWrap: true, colSpan: 2);
-            table.SetCell(2, row, getDocumentation(field, type, applicationTr, helpProcessor), colSpan: 4);
+            table.SetCell(2, row, getDocumentation(field, type, helpProcessor), colSpan: 4);
             row++;
         }
         // ### All other non-positional parameters
@@ -771,7 +735,7 @@ public static class CommandLineParser
         {
             table.SetCell(0, row, field.GetOrderedOptionAttributeNames().Where(o => !o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(", "), noWrap: true);
             table.SetCell(1, row, field.GetOrderedOptionAttributeNames().Where(o => o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(Environment.NewLine), noWrap: true);
-            table.SetCell(2, row, getDocumentation(field, type, applicationTr, helpProcessor), colSpan: 4);
+            table.SetCell(2, row, getDocumentation(field, type, helpProcessor), colSpan: 4);
             row++;
         }
         return anyCommandsWithSuboptions;
@@ -791,41 +755,26 @@ public static class CommandLineParser
             ).Add(field);
     }
 
-    private static ConsoleColoredString getDocumentation(MemberInfo member, Type inType, TranslationBase applicationTr, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
-    {
-        if (member.IsDefined<DocumentationAttribute>())
-            return helpProcessor(member.GetCustomAttributes<DocumentationAttribute>().Select(d => d.Text ?? "").First());
-        if (applicationTr == null)
-            return "";
-
-        if (!(member is Type) && inType.IsSubclassOf(member.DeclaringType))
-            inType = member.DeclaringType;
-        var meth = inType.GetMethod(member.Name + "Doc", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, new Type[] { applicationTr.GetType() }, null);
-        if (meth == null || meth.ReturnType != typeof(string))
-            return "";
-        var str = (string) meth.Invoke(null, new object[] { applicationTr });
-        return str == null ? "" : helpProcessor(CommandLineParser.Colorize(EggsML.Parse(str)));
-    }
+    private static ConsoleColoredString getDocumentation(MemberInfo member, Type inType, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor) =>
+        member.IsDefined<DocumentationAttribute>() ? helpProcessor(member.GetCustomAttributes<DocumentationAttribute>().Select(d => d.Text ?? "").First()) : "";
 
     #region Post-build step check
 
     /// <summary>
     ///     Performs safety checks to ensure that the structure of your command-line syntax defining class is valid according
     ///     to the criteria laid out in the documentation of <see cref="CommandLineParser"/>. Run this method as a post-build
-    ///     step to ensure reliability of execution. For an example of use, see <see cref="Ut.RunPostBuildChecks"/>.</summary>
+    ///     step to ensure reliability of execution. For an example of use, see <see
+    ///     cref="PostBuildChecker.RunPostBuildChecks(string, Assembly[])"/>.</summary>
     /// <typeparam name="TArgs">
     ///     The class containing the fields and attributes which define the command-line syntax.</typeparam>
     /// <param name="rep">
     ///     Object to report post-build errors to.</param>
-    /// <param name="applicationTrType">
-    ///     The type of the translation object, derived from <see cref="TranslationBase"/>, which would be passed in for the
-    ///     “applicationTr” parameter of <see cref="Parse"/> at normal run-time.</param>
-    public static void PostBuildStep<TArgs>(IPostBuildReporter rep, Type applicationTrType)
+    public static void PostBuildStep<TArgs>(IPostBuildReporter rep)
     {
-        postBuildStep(rep, typeof(TArgs), applicationTrType, false);
+        postBuildStep(rep, typeof(TArgs), false);
     }
 
-    private static void postBuildStep(IPostBuildReporter rep, Type commandLineType, Type applicationTrType, bool classDocRecommended)
+    private static void postBuildStep(IPostBuildReporter rep, Type commandLineType, bool classDocRecommended)
     {
         if (!commandLineType.IsClass)
             rep.Error(@"{0} is not a class.".Fmt(commandLineType.FullName), (commandLineType.IsEnum ? "enum " : commandLineType.IsInterface ? "interface " : typeof(Delegate).IsAssignableFrom(commandLineType) ? "delegate " : "struct ") + commandLineType.Name);
@@ -841,24 +790,12 @@ public static class CommandLineParser
             return;
         }
 
-        if (applicationTrType != null)
-        {
-            Type[] typeParam;
-            if (commandLineType.TryGetInterfaceGenericParameters(typeof(ICommandLineValidatable<>), out typeParam) && typeParam[0] != applicationTrType)
-                rep.Error(@"The type {0} implements {1}, but the ApplicationTr type is {2}. If ApplicationTr is right, the interface implemented should be {3}.".Fmt(
-                    commandLineType.FullName,
-                    typeof(ICommandLineValidatable<>).MakeGenericType(typeParam[0]).FullName,
-                    applicationTrType.FullName,
-                    typeof(ICommandLineValidatable<>).MakeGenericType(applicationTrType).FullName
-                ), "class " + commandLineType.Name);
-        }
-
         var optionTaken = new Dictionary<string, MemberInfo>();
         var sensibleDocMethods = new List<MethodInfo>();
         FieldInfo lastField = null;
         bool haveSeenOptionalPositional = false;
 
-        checkDocumentation(rep, commandLineType, commandLineType, applicationTrType, sensibleDocMethods, classDocRecommended);
+        checkDocumentation(rep, commandLineType, commandLineType, sensibleDocMethods, classDocRecommended);
 
         foreach (var field in commandLineType.GetFields())
         {
@@ -870,7 +807,7 @@ public static class CommandLineParser
 
             // Every field must have one of the following
             var positional = field.IsDefined<IsPositionalAttribute>();
-            var options = field.GetOrderedOptionAttributeNames();
+            var options = field.GetOrderedOptionAttributeNames().ToArray();
             var enumOpt = field.GetCustomAttributes<EnumOptionsAttribute>().FirstOrDefault();
 
             if (!positional && options == null && enumOpt == null)
@@ -927,7 +864,7 @@ public static class CommandLineParser
                         continue;
 
                     // check that the enum values all have documentation
-                    checkDocumentation(rep, enumField, commandLineType, applicationTrType, sensibleDocMethods, true);
+                    checkDocumentation(rep, enumField, commandLineType, sensibleDocMethods, true);
 
                     if (options != null || positional)
                     {
@@ -951,7 +888,7 @@ public static class CommandLineParser
 
                 // If the enum field has an Option attribute, it needs documentation too
                 if (options != null)
-                    checkDocumentation(rep, field, commandLineType, applicationTrType, sensibleDocMethods, true);
+                    checkDocumentation(rep, field, commandLineType, sensibleDocMethods, true);
             }
             // ### BOOL fields
             else if (field.FieldType == typeof(bool))
@@ -961,7 +898,7 @@ public static class CommandLineParser
                 else
                     // Here we have checked that the field is not positional, not an enum, and not [Ignore]’d, so it must have an [Option] attribute
                     checkOptionsUnique(rep, options, optionTaken, commandLineType, field);
-                checkDocumentation(rep, field, commandLineType, applicationTrType, sensibleDocMethods, true);
+                checkDocumentation(rep, field, commandLineType, sensibleDocMethods, true);
             }
             // ### STRING, STRING[], INTEGER and FLOATING fields (including nullable)
             else if (field.FieldType == typeof(string) || field.FieldType == typeof(string[]) ||
@@ -972,7 +909,7 @@ public static class CommandLineParser
                 // options is null if and only if this field is positional
                 if (options != null)
                     checkOptionsUnique(rep, options, optionTaken, commandLineType, field);
-                checkDocumentation(rep, field, commandLineType, applicationTrType, sensibleDocMethods, true);
+                checkDocumentation(rep, field, commandLineType, sensibleDocMethods, true);
             }
             // ### Command-group classes
             else if (field.FieldType.IsClass && field.FieldType.IsDefined<CommandGroupAttribute>())
@@ -996,7 +933,7 @@ public static class CommandLineParser
                         checkCommandNamesUnique(rep, subclass.GetCustomAttributes<CommandNameAttribute>().First().Names, commandsTaken, subclass);
 
                     // Recursively check this class
-                    postBuildStep(rep, subclass, applicationTrType, true);
+                    postBuildStep(rep, subclass, true);
                 }
 
                 lastField = field;
@@ -1004,12 +941,6 @@ public static class CommandLineParser
             else
                 rep.Error(@"{0}.{1} is not of a supported type. Currently accepted types are: enum types, bool, string, string[], numeric types (byte, sbyte, short, ushort, int, uint, long, ulong, float and double), nullable numeric types, and classes with the [CommandGroup] attribute.".Fmt(commandLineType.FullName, field.Name), "class " + commandLineType.Name, field.Name);
         }
-
-        if (applicationTrType != null)
-            // Warn if the class has unused documentation methods
-            foreach (var meth in commandLineType.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).Where(m => m.Name.EndsWith("Doc") && m.ReturnType == typeof(string) && m.GetParameters().Select(p => p.ParameterType).SequenceEqual(new Type[] { applicationTrType })))
-                if (!sensibleDocMethods.Contains(meth))
-                    rep.Error(@"{0}.{1} looks like a documentation method, but has no corresponding field, or the corresponding field does not require documentation because it is a positional enum or has an [EnumOptions] attribute.".Fmt(commandLineType.FullName, meth.Name), "class " + commandLineType.Name, meth.Name);
     }
 
     private static void checkOptionsUnique(IPostBuildReporter rep, IEnumerable<string> options, Dictionary<string, MemberInfo> optionTaken, Type type, FieldInfo field, FieldInfo enumField)
@@ -1077,7 +1008,7 @@ public static class CommandLineParser
         }
     }
 
-    private static void checkDocumentation(IPostBuildReporter rep, MemberInfo member, Type inType, Type applicationTrType, List<MethodInfo> sensibleDocMethods, bool classDocRecommended)
+    private static void checkDocumentation(IPostBuildReporter rep, MemberInfo member, Type inType, List<MethodInfo> sensibleDocMethods, bool classDocRecommended)
     {
         if (member.IsDefined<UndocumentedAttribute>())
             return;
@@ -1102,32 +1033,14 @@ public static class CommandLineParser
                 return;
             }
         }
-        else if (applicationTrType != null)
-        {
-            var meth = inType.GetMethod(member.Name + "Doc", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, new Type[] { applicationTrType }, null);
-            if (meth != null && meth.ReturnType == typeof(string))
-            {
-                sensibleDocMethods.Add(meth);
-                if (!_applicationTrCache.ContainsKey(applicationTrType))
-                    _applicationTrCache[applicationTrType] = Activator.CreateInstance(applicationTrType);
-                var appTr = _applicationTrCache[applicationTrType];
-                toCheck = (string) meth.Invoke(null, new object[] { appTr });
-                if (toCheck == null)
-                {
-                    rep.Error(@"{0}." + member.Name + @"Doc() returned null.".Fmt(inType.FullName), "class " + inType.Name, member.Name + "Doc");
-                    return;
-                }
-            }
-        }
 
         if (classDocRecommended && toCheck == null)
         {
             if (member is Type)
             {
                 rep.Warning((@"{0} does not have any documentation. " +
-                    (applicationTrType == null ? "U" : @"To provide localised documentation, declare a method ""static string {1}Doc({2})"" on {3}. Otherwise, u") +
-                    @"se the [DocumentationLiteral] attribute to specify unlocalisable documentation. " +
-                    @"Use [Undocumented] to completely hide an option or command from the help screen.").Fmt(((Type) member).FullName, member.Name, applicationTrType != null ? applicationTrType.FullName : null, inType.FullName),
+                    @"Use the [DocumentationLiteral] attribute to specify unlocalisable documentation. " +
+                    @"Use [Undocumented] to completely hide an option or command from the help screen.").Fmt(((Type) member).FullName),
                     ((Type) member).Namespace,
                     "CommandName",
                     "class " + member.Name);
@@ -1135,9 +1048,8 @@ public static class CommandLineParser
             else
             {
                 rep.Warning((@"{0}.{1} does not have any documentation. " +
-                    (applicationTrType == null ? "U" : @"To provide localised documentation, declare a method ""static string {1}Doc({2})"" on {3}. Otherwise, u") +
-                    @"se the [DocumentationLiteral] attribute to specify unlocalisable documentation. " +
-                    @"Use [Undocumented] to completely hide an option or command from the help screen.").Fmt(member.DeclaringType.FullName, member.Name, applicationTrType != null ? applicationTrType.FullName : null, inType.FullName),
+                    @"Use the [DocumentationLiteral] attribute to specify unlocalisable documentation. " +
+                    @"Use [Undocumented] to completely hide an option or command from the help screen.").Fmt(member.DeclaringType.FullName, member.Name),
                     member.DeclaringType.Namespace,
                     (member.DeclaringType.IsEnum ? "enum " : member.DeclaringType.IsValueType ? "struct " : "class ") + member.DeclaringType.Name,
                     member.Name);
@@ -1293,70 +1205,13 @@ internal static class CmdLineColor
 
 /// <summary>
 ///     Contains methods to validate a set of parameters passed by the user on the command-line and parsed by <see
-///     cref="CommandLineParser"/>. Use this class only in monolingual (unlocalisable) applications. Use <see
-///     cref="ICommandLineValidatable{TTranslation}"/> otherwise.</summary>
+///     cref="CommandLineParser"/>.</summary>
 public interface ICommandLineValidatable
 {
     /// <summary>
     ///     When overridden in a derived class, returns an error message if the contents of the class are invalid, otherwise
     ///     returns null.</summary>
     ConsoleColoredString Validate();
-}
-
-/// <summary>
-///     Contains methods to validate a set of parameters passed by the user on the command-line and parsed by <see
-///     cref="CommandLineParser"/>.</summary>
-/// <typeparam name="TTranslation">
-///     A translation-string class containing the error messages that can occur during validation.</typeparam>
-public interface ICommandLineValidatable<in TTranslation> where TTranslation : TranslationBase
-{
-    /// <summary>
-    ///     When implemented in a class, returns an error message if the contents of the class are invalid, otherwise returns
-    ///     null.</summary>
-    /// <param name="tr">
-    ///     Contains translations for the messages that may occur during validation.</param>
-    ConsoleColoredString Validate(TTranslation tr);
-}
-
-/// <summary>Groups the translatable strings in the <see cref="Translation"/> class into categories.</summary>
-public enum TranslationGroup
-{
-    /// <summary>Error messages produced by the command-line parser.</summary>
-    [LingoGroup("Command-line errors", "Contains messages informing the user of invalid command-line syntax.")]
-    CommandLineError,
-    /// <summary>Messages used by the command-line parser to produce help pages.</summary>
-    [LingoGroup("Command-line help", "Contains messages used to construct help pages for command-line options and parameters.")]
-    CommandLineHelp
-}
-
-/// <summary>Contains translatable strings pertaining to the command-line parser, including error messages and usage help.</summary>
-public sealed class Translation : TranslationBase
-{
-#pragma warning disable 1591    // Missing XML comment for publicly visible type or member
-    public Translation() : base(Language.EnglishUS) { }
-
-    [LingoInGroup(TranslationGroup.CommandLineError)]
-    public TrString
-        IncompatibleCommandOrOption = @"The command or option, {0}, cannot be used in conjunction with {1}. Please specify only one of the two.",
-        IncompleteOption = @"The {0} option must be followed by an additional parameter.",
-        InvalidNumber = @"The {0} option expects a number. The specified parameter does not constitute a valid number.",
-        MissingOption = @"The option {0} is mandatory and must be specified.",
-        MissingOptionBefore = @"The option {0} is mandatory and must be specified before the {1} parameter.",
-        MissingParameter = @"The parameter {0} is mandatory and must be specified.",
-        MissingParameterBefore = @"The parameter {0} is mandatory and must be specified before the {1} parameter.",
-        UnexpectedParameter = @"Unexpected parameter: {0}",
-        UnrecognizedCommandOrOption = @"The specified command or option, {0}, is not recognized.",
-        UserRequestedHelp = @"The user has requested help using one of the help options.";
-
-    [LingoInGroup(TranslationGroup.CommandLineHelp)]
-    public TrString
-        AdditionalOptions = @"This command accepts further arguments on the command line. Type the command followed by *-?* or *help* to list them.",
-        Error = @"Error:",
-        OptionsHeader = @"Optional parameters:",
-        ParametersHeader = @"Required parameters:",
-        Usage = @"Usage:";
-
-#pragma warning restore 1591    // Missing XML comment for publicly visible type or member
 }
 
 /// <summary>Use this on an abstract class to specify that its subclasses represent various commands.</summary>
@@ -1539,38 +1394,31 @@ public sealed class IgnoreAttribute : Attribute
 
 /// <summary>Represents any error encountered while parsing a command line. This class is abstract.</summary>
 [Serializable]
-public abstract class CommandLineParseException : TranslatableException<Translation>
+public abstract class CommandLineParseException : Exception
 {
     /// <summary>
     ///     Generates the help screen to be output to the user on the console. For non-internationalised (single-language)
     ///     applications, pass null for the Translation parameter.</summary>
-    internal Func<Translation, int, ConsoleColoredString> GenerateHelpFunc { get; private set; }
+    internal Func<int, ConsoleColoredString> GenerateHelpFunc { get; private set; }
     /// <summary>Contains the error message that describes the cause of this exception.</summary>
-    public Func<Translation, ConsoleColoredString> GetColoredMessage { get; private set; }
+    public Func<ConsoleColoredString> GetColoredMessage { get; private set; }
     /// <summary>
     ///     Generates the help screen to be output to the user on the console.</summary>
-    /// <param name="tr">
-    ///     The translation class containing the translated text, or <c>null</c> for English.</param>
     /// <param name="wrapWidth">
     ///     The character width at which the output should be word-wrapped. The default (<c>null</c>) uses <see
     ///     cref="ConsoleUtil.WrapToWidth"/>.</param>
-    public ConsoleColoredString GenerateHelp(Translation tr, int? wrapWidth = null) { return GenerateHelpFunc(tr, wrapWidth ?? ConsoleUtil.WrapToWidth()); }
+    public ConsoleColoredString GenerateHelp(int? wrapWidth = null) { return GenerateHelpFunc(wrapWidth ?? ConsoleUtil.WrapToWidth()); }
     /// <summary>
     ///     Generates a printable description of the error represented by this exception, typically used to tell the user what
     ///     they did wrong.</summary>
-    /// <param name="tr">
-    ///     The translation class containing the translated text, or <c>null</c> for English.</param>
     /// <param name="wrapWidth">
     ///     The character width at which the output should be word-wrapped. The default (<c>null</c>) uses <see
     ///     cref="ConsoleUtil.WrapToWidth"/>.</param>
-    public ConsoleColoredString GenerateErrorText(Translation tr, int? wrapWidth = null)
+    public ConsoleColoredString GenerateErrorText(int? wrapWidth = null)
     {
-        if (tr == null)
-            tr = new Translation();
-
         var strings = new List<ConsoleColoredString>();
-        var message = tr.Error.Translation.Color(CmdLineColor.Error) + " " + GetColoredMessage(tr);
-        foreach (var line in message.WordWrap(wrapWidth ?? ConsoleUtil.WrapToWidth(), tr.Error.Translation.Length + 1))
+        var message = "Error:".Color(CmdLineColor.Error) + " " + GetColoredMessage();
+        foreach (var line in message.WordWrap(wrapWidth ?? ConsoleUtil.WrapToWidth(), "Error:".Length + 1))
         {
             strings.Add(line);
             strings.Add(Environment.NewLine);
@@ -1579,10 +1427,10 @@ public abstract class CommandLineParseException : TranslatableException<Translat
     }
 
     /// <summary>Constructor.</summary>
-    public CommandLineParseException(Func<Translation, ConsoleColoredString> getMessage, Func<Translation, int, ConsoleColoredString> helpGenerator) : this(getMessage, helpGenerator, null) { }
+    public CommandLineParseException(Func<ConsoleColoredString> getMessage, Func<int, ConsoleColoredString> helpGenerator) : this(getMessage, helpGenerator, null) { }
     /// <summary>Constructor.</summary>
-    public CommandLineParseException(Func<Translation, ConsoleColoredString> getMessage, Func<Translation, int, ConsoleColoredString> helpGenerator, Exception inner)
-        : base(tr => getMessage(tr).ToString(), inner)
+    public CommandLineParseException(Func<ConsoleColoredString> getMessage, Func<int, ConsoleColoredString> helpGenerator, Exception inner)
+        : base(getMessage().ToString(), inner)
     {
         GenerateHelpFunc = helpGenerator;
         GetColoredMessage = getMessage;
@@ -1591,18 +1439,12 @@ public abstract class CommandLineParseException : TranslatableException<Translat
     /// <summary>
     ///     Prints usage information, followed by an error message describing to the user what it was that the parser didn't
     ///     understand.</summary>
-    /// <param name="tr">
-    ///     Contains translations for the messages used by the command-line parser. Set this to null only if your application
-    ///     is definitely monolingual (unlocalisable).</param>
-    public virtual void WriteUsageInfoToConsole(Translation tr = null)
+    public virtual void WriteUsageInfoToConsole()
     {
-        if (tr == null)
-            tr = new Translation();
-
-        ConsoleUtil.Write(GenerateHelp(tr, ConsoleUtil.WrapToWidth()));
+        ConsoleUtil.Write(GenerateHelp(ConsoleUtil.WrapToWidth()));
 
         Console.WriteLine();
-        ConsoleUtil.Write(GenerateErrorText(tr, ConsoleUtil.WrapToWidth()));
+        ConsoleUtil.Write(GenerateErrorText(ConsoleUtil.WrapToWidth()));
     }
 }
 
@@ -1611,23 +1453,14 @@ public abstract class CommandLineParseException : TranslatableException<Translat
 public sealed class CommandLineHelpRequestedException : CommandLineParseException
 {
     /// <summary>Constructor.</summary>
-    public CommandLineHelpRequestedException(Func<Translation, int, ConsoleColoredString> helpGenerator)
-        : base(tr => tr.UserRequestedHelp.Color(ConsoleColor.Gray), helpGenerator)
+    public CommandLineHelpRequestedException(Func<int, ConsoleColoredString> helpGenerator)
+        : base(() => "The user has requested help using one of the help options.".Color(ConsoleColor.Gray), helpGenerator)
     {
     }
 
     /// <summary>
     ///     Prints usage information.</summary>
-    /// <param name="tr">
-    ///     Contains translations for the messages used by the command-line parser. Set this to null only if your application
-    ///     is definitely monolingual (unlocalisable).</param>
-    public override void WriteUsageInfoToConsole(Translation tr = null)
-    {
-        if (tr == null)
-            tr = new Translation();
-
-        ConsoleUtil.Write(GenerateHelp(tr, ConsoleUtil.WrapToWidth()));
-    }
+    public override void WriteUsageInfoToConsole() => ConsoleUtil.Write(GenerateHelp(ConsoleUtil.WrapToWidth()));
 }
 
 /// <summary>Specifies that the arguments specified by the user on the command-line do not pass the custom validation checks.</summary>
@@ -1635,7 +1468,7 @@ public sealed class CommandLineHelpRequestedException : CommandLineParseExceptio
 public sealed class CommandLineValidationException : CommandLineParseException
 {
     /// <summary>Constructor.</summary>
-    public CommandLineValidationException(ConsoleColoredString message, Func<Translation, int, ConsoleColoredString> helpGenerator) : base(tr => message, helpGenerator) { }
+    public CommandLineValidationException(ConsoleColoredString message, Func<int, ConsoleColoredString> helpGenerator) : base(() => message, helpGenerator) { }
 }
 
 /// <summary>
@@ -1647,10 +1480,10 @@ public sealed class UnrecognizedCommandOrOptionException : CommandLineParseExcep
     /// <summary>The unrecognized command name or option name.</summary>
     public string CommandOrOptionName { get; private set; }
     /// <summary>Constructor.</summary>
-    public UnrecognizedCommandOrOptionException(string commandOrOptionName, Func<Translation, int, ConsoleColoredString> helpGenerator) : this(commandOrOptionName, helpGenerator, null) { }
+    public UnrecognizedCommandOrOptionException(string commandOrOptionName, Func<int, ConsoleColoredString> helpGenerator) : this(commandOrOptionName, helpGenerator, null) { }
     /// <summary>Constructor.</summary>
-    public UnrecognizedCommandOrOptionException(string commandOrOptionName, Func<Translation, int, ConsoleColoredString> helpGenerator, Exception inner)
-        : base(tr => tr.UnrecognizedCommandOrOption.ToConsoleColoredString().Fmt(commandOrOptionName.Color(ConsoleColor.White)), helpGenerator, inner)
+    public UnrecognizedCommandOrOptionException(string commandOrOptionName, Func<int, ConsoleColoredString> helpGenerator, Exception inner)
+        : base(() => "The specified command or option, {0}, is not recognized.".ToConsoleColoredString().Fmt(commandOrOptionName.Color(ConsoleColor.White)), helpGenerator, inner)
     {
         CommandOrOptionName = commandOrOptionName;
     }
@@ -1669,10 +1502,10 @@ public sealed class IncompatibleCommandOrOptionException : CommandLineParseExcep
     /// <summary>The later option or command, which conflicts with the <see cref="EarlierCommandOrOption"/>.</summary>
     public string LaterCommandOrOption { get; private set; }
     /// <summary>Constructor.</summary>
-    public IncompatibleCommandOrOptionException(string earlier, string later, Func<Translation, int, ConsoleColoredString> helpGenerator) : this(earlier, later, helpGenerator, null) { }
+    public IncompatibleCommandOrOptionException(string earlier, string later, Func<int, ConsoleColoredString> helpGenerator) : this(earlier, later, helpGenerator, null) { }
     /// <summary>Constructor.</summary>
-    public IncompatibleCommandOrOptionException(string earlier, string later, Func<Translation, int, ConsoleColoredString> helpGenerator, Exception inner)
-        : base(tr => tr.IncompatibleCommandOrOption.ToConsoleColoredString().Fmt(later.Color(ConsoleColor.White), earlier.Color(ConsoleColor.White)), helpGenerator, inner)
+    public IncompatibleCommandOrOptionException(string earlier, string later, Func<int, ConsoleColoredString> helpGenerator, Exception inner)
+        : base(() => "The command or option, {0}, cannot be used in conjunction with {1}. Please specify only one of the two.".ToConsoleColoredString().Fmt(later.Color(ConsoleColor.White), earlier.Color(ConsoleColor.White)), helpGenerator, inner)
     {
         EarlierCommandOrOption = earlier;
         LaterCommandOrOption = later;
@@ -1688,10 +1521,10 @@ public sealed class IncompleteOptionException : CommandLineParseException
     /// <summary>The name of the option that was missing an argument.</summary>
     public string OptionName { get; private set; }
     /// <summary>Constructor.</summary>
-    public IncompleteOptionException(string optionName, Func<Translation, int, ConsoleColoredString> helpGenerator) : this(optionName, helpGenerator, null) { }
+    public IncompleteOptionException(string optionName, Func<int, ConsoleColoredString> helpGenerator) : this(optionName, helpGenerator, null) { }
     /// <summary>Constructor.</summary>
-    public IncompleteOptionException(string optionName, Func<Translation, int, ConsoleColoredString> helpGenerator, Exception inner)
-        : base(tr => tr.IncompleteOption.ToConsoleColoredString().Fmt(optionName.Color(ConsoleColor.White)), helpGenerator, inner)
+    public IncompleteOptionException(string optionName, Func<int, ConsoleColoredString> helpGenerator, Exception inner)
+        : base(() => "The {0} option must be followed by an additional parameter.".ToConsoleColoredString().Fmt(optionName.Color(ConsoleColor.White)), helpGenerator, inner)
     {
         OptionName = optionName;
     }
@@ -1706,10 +1539,10 @@ public sealed class UnexpectedArgumentException : CommandLineParseException
     /// <summary>Contains the first unexpected argument and all of the subsequent arguments.</summary>
     public string[] UnexpectedParameters { get; private set; }
     /// <summary>Constructor.</summary>
-    public UnexpectedArgumentException(string[] unexpectedArgs, Func<Translation, int, ConsoleColoredString> helpGenerator) : this(unexpectedArgs, helpGenerator, null) { }
+    public UnexpectedArgumentException(string[] unexpectedArgs, Func<int, ConsoleColoredString> helpGenerator) : this(unexpectedArgs, helpGenerator, null) { }
     /// <summary>Constructor.</summary>
-    public UnexpectedArgumentException(string[] unexpectedArgs, Func<Translation, int, ConsoleColoredString> helpGenerator, Exception inner)
-        : base(tr => tr.UnexpectedParameter.ToConsoleColoredString().Fmt(unexpectedArgs.Select(prm => prm.Length > 50 ? prm.Substring(0, 47) + "..." : prm).FirstOrDefault().Color(CmdLineColor.UnexpectedArgument)), helpGenerator, inner)
+    public UnexpectedArgumentException(string[] unexpectedArgs, Func<int, ConsoleColoredString> helpGenerator, Exception inner)
+        : base(() => "Unexpected parameter: {0}".ToConsoleColoredString().Fmt(unexpectedArgs.Select(prm => prm.Length > 50 ? prm.Substring(0, 47) + "..." : prm).FirstOrDefault().Color(CmdLineColor.UnexpectedArgument)), helpGenerator, inner)
     {
         UnexpectedParameters = unexpectedArgs;
     }
@@ -1724,10 +1557,10 @@ public sealed class InvalidNumericParameterException : CommandLineParseException
     /// <summary>Contains the name of the field pertaining to the parameter that was passed an invalid value.</summary>
     public string FieldName { get; private set; }
     /// <summary>Constructor.</summary>
-    public InvalidNumericParameterException(string fieldName, Func<Translation, int, ConsoleColoredString> helpGenerator) : this(fieldName, helpGenerator, null) { }
+    public InvalidNumericParameterException(string fieldName, Func<int, ConsoleColoredString> helpGenerator) : this(fieldName, helpGenerator, null) { }
     /// <summary>Constructor.</summary>
-    public InvalidNumericParameterException(string fieldName, Func<Translation, int, ConsoleColoredString> helpGenerator, Exception inner)
-        : base(tr => tr.InvalidNumber.ToConsoleColoredString().Fmt("<".Color(CmdLineColor.FieldBrackets) + fieldName.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets)), helpGenerator, inner)
+    public InvalidNumericParameterException(string fieldName, Func<int, ConsoleColoredString> helpGenerator, Exception inner)
+        : base(() => "The {0} option expects a number. The specified parameter does not constitute a valid number.".ToConsoleColoredString().Fmt("<".Color(CmdLineColor.FieldBrackets) + fieldName.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets)), helpGenerator, inner)
     {
         FieldName = fieldName;
     }
@@ -1747,17 +1580,17 @@ public sealed class MissingParameterException : CommandLineParseException
     ///     Specifies whether the missing parameter was a missing option (true) or a missing positional parameter (false).</summary>
     public bool IsOption { get; private set; }
     /// <summary>Constructor.</summary>
-    public MissingParameterException(FieldInfo paramField, FieldInfo beforeField, bool isOption, Func<Translation, int, ConsoleColoredString> helpGenerator) : this(paramField, beforeField, isOption, helpGenerator, null) { }
+    public MissingParameterException(FieldInfo paramField, FieldInfo beforeField, bool isOption, Func<int, ConsoleColoredString> helpGenerator) : this(paramField, beforeField, isOption, helpGenerator, null) { }
     /// <summary>Constructor.</summary>
-    public MissingParameterException(FieldInfo paramField, FieldInfo beforeField, bool isOption, Func<Translation, int, ConsoleColoredString> helpGenerator, Exception inner)
-        : base(tr => getMessage(tr, paramField, beforeField, isOption), helpGenerator, inner) { Field = paramField; BeforeField = beforeField; IsOption = isOption; }
+    public MissingParameterException(FieldInfo paramField, FieldInfo beforeField, bool isOption, Func<int, ConsoleColoredString> helpGenerator, Exception inner)
+        : base(() => getMessage(paramField, beforeField, isOption), helpGenerator, inner) { Field = paramField; BeforeField = beforeField; IsOption = isOption; }
 
-    private static ConsoleColoredString getMessage(Translation tr, FieldInfo field, FieldInfo beforeField, bool isOption)
+    private static ConsoleColoredString getMessage(FieldInfo field, FieldInfo beforeField, bool isOption)
     {
         if (beforeField == null)
-            return (isOption ? tr.MissingOption : tr.MissingParameter).ToConsoleColoredString().Fmt(field.FormatParameterUsage(true));
+            return (isOption ? "The option {0} is mandatory and must be specified." : "The parameter {0} is mandatory and must be specified.").ToConsoleColoredString().Fmt(field.FormatParameterUsage(true));
 
-        return (isOption ? tr.MissingOptionBefore : tr.MissingParameterBefore).ToConsoleColoredString().Fmt(
+        return (isOption ? "The option {0} is mandatory and must be specified before the {1} parameter." : "The parameter {0} is mandatory and must be specified before the {1} parameter.").ToConsoleColoredString().Fmt(
             field.FormatParameterUsage(true),
             "<".Color(CmdLineColor.FieldBrackets) + beforeField.Name.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets));
     }
@@ -1765,10 +1598,10 @@ public sealed class MissingParameterException : CommandLineParseException
 
 static class CmdLineExtensions
 {
-    public static string[] GetOrderedOptionAttributeNames(this MemberInfo member)
+    public static IEnumerable<string> GetOrderedOptionAttributeNames(this MemberInfo member)
     {
         var attr = member.GetCustomAttributes<OptionAttribute>().FirstOrDefault();
-        return attr == null ? null : attr.Names.OrderBy(compareOptionNames).ToArray();
+        return attr == null ? [] : attr.Names.OrderBy(compareOptionNames);
     }
 
     private static int compareOptionNames(string opt1, string opt2)

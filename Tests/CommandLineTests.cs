@@ -3,9 +3,10 @@ using Xunit;
 
 namespace RT.CommandLine.Tests;
 
+#pragma warning disable 0649 // Field is never assigned to, and will always have its default value null
+
 public sealed class CmdLineTests
 {
-#pragma warning disable 0649 // Field is never assigned to, and will always have its default value null
     private class CommandLineWithOption
     {
         [IsPositional, IsMandatory]
@@ -20,71 +21,6 @@ public sealed class CmdLineTests
         [IsPositional]
         public string[] Args;
     }
-
-    [CommandLine]
-    abstract class CmdBase1 : ICommandLineValidatable
-    {
-        [IsPositional, IsMandatory]
-        public string Base;
-
-        public static int ValidateCalled = 0;
-
-        public ConsoleColoredString Validate()
-        {
-            ValidateCalled++;
-            return null;
-        }
-    }
-
-    [CommandName("sub")]
-    sealed class CmdSubcmd1 : CmdBase1
-    {
-        [IsPositional, IsMandatory]
-        public string ItemName;
-    }
-
-    [CommandLine]
-    abstract class CmdBase2
-    {
-        [IsPositional, IsMandatory]
-        public string Base;
-    }
-
-    [CommandName("sub")]
-    sealed class CmdSubcmd2 : CmdBase2, ICommandLineValidatable
-    {
-        [IsPositional, IsMandatory]
-        public string ItemName;
-
-        public static int ValidateCalled = 0;
-
-        public ConsoleColoredString Validate()
-        {
-            ValidateCalled++;
-            return null;
-        }
-    }
-
-    [CommandLine]
-    abstract class CmdBase3
-    {
-        [IsPositional, IsMandatory]
-        public string Base;
-    }
-
-    abstract class CmdSubBase3 : CmdBase3
-    {
-        [IsPositional, IsMandatory]
-        public string SubBase;
-    }
-
-    [CommandName("sub")]
-    sealed class CmdSubcmd3 : CmdSubBase3
-    {
-        [IsPositional, IsMandatory]
-        public string ItemName;
-    }
-#pragma warning restore 0649 // Field is never assigned to, and will always have its default value null
 
     [Fact]
     public static void TestMinusMinus()
@@ -142,7 +78,7 @@ public sealed class CmdLineTests
     }
 
     [Fact]
-    public static void TestInvalidOptionAndLingo()
+    public static void TestInvalidOption()
     {
         try
         {
@@ -152,41 +88,73 @@ public sealed class CmdLineTests
         catch (CommandLineParseException e)
         {
             Assert.Equal("The specified command or option, --blah, is not recognized.", e.Message);
-            Assert.Equal("The specified command or option, --blah, is not recognized.", e.GetColoredMessage(new Translation()).ToString());
-            var tr = new Translation();
-            tr.UnrecognizedCommandOrOption = "Неизвестная опция или команда: {0}.";
-            Assert.Equal("Неизвестная опция или команда: --blah.", e.GetColoredMessage(tr).ToString());
+            Assert.Equal("The specified command or option, --blah, is not recognized.", e.GetColoredMessage().ToString());
         }
+    }
+
+
+    class Test1Cmd : ICommandLineValidatable
+    {
+        [IsPositional, IsMandatory]
+        public string Base;
+
+        [IsPositional, IsMandatory]
+        public Test1SubcommandBase Subcommand;
+
+        public static int ValidateCalled = 0;
+
+        public ConsoleColoredString Validate()
+        {
+            ValidateCalled++;
+            return null;
+        }
+    }
+
+    [CommandGroup]
+    abstract class Test1SubcommandBase : ICommandLineValidatable
+    {
+        public static int ValidateCalled = 0;
+        public abstract ConsoleColoredString Validate();
+    }
+
+    [CommandName("sub1")]
+    sealed class Test1Subcommand1 : Test1SubcommandBase
+    {
+        [IsPositional, IsMandatory]
+        public string ItemName;
+
+        public override ConsoleColoredString Validate()
+        {
+            ValidateCalled++;
+            return null;
+        }
+    }
+
+    [CommandName("sub2")]
+    sealed class Test1Subcommand2 : Test1SubcommandBase
+    {
+        public override ConsoleColoredString Validate() { return null; }
     }
 
     [Fact]
     public static void TestSubcommandValidation()
     {
-        CmdBase1.ValidateCalled = 0;
-        var c = CommandLineParser.Parse<CmdBase1>(["base", "sub", "item"]);
-        Assert.IsType<CmdSubcmd1>(c);
-        var cs1 = (CmdSubcmd1) c;
-        Assert.Equal("base", cs1.Base);
+        Test1Cmd.ValidateCalled = 0;
+        Test1SubcommandBase.ValidateCalled = 0;
+        var c = CommandLineParser.Parse<Test1Cmd>(["base", "sub1", "item"]);
+        Assert.Equal("base", c.Base);
+        Assert.IsType<Test1Subcommand1>(c.Subcommand);
+        var cs1 = (Test1Subcommand1) c.Subcommand;
         Assert.Equal("item", cs1.ItemName);
-        Assert.Equal(1, CmdBase1.ValidateCalled);
+        Assert.Equal(1, Test1Cmd.ValidateCalled);
+        Assert.Equal(1, Test1SubcommandBase.ValidateCalled);
 
-        CmdSubcmd2.ValidateCalled = 0;
-        var c2 = CommandLineParser.Parse<CmdBase2>(["base", "sub", "item"]);
-        Assert.IsType<CmdSubcmd2>(c2);
-        var cs2 = (CmdSubcmd2) c2;
-        Assert.Equal("base", cs2.Base);
-        Assert.Equal("item", cs2.ItemName);
-        Assert.Equal(1, CmdSubcmd2.ValidateCalled);
-    }
-
-    [Fact]
-    public static void TestSubcommandIntermediate()
-    {
-        var c3 = CommandLineParser.Parse<CmdBase3>(["base", "sub", "subbase", "item"]);
-        Assert.IsType<CmdSubcmd3>(c3);
-        var cs3 = (CmdSubcmd3) c3;
-        Assert.Equal("base", cs3.Base);
-        Assert.Equal("subbase", cs3.SubBase);
-        Assert.Equal("item", cs3.ItemName);
+        Test1Cmd.ValidateCalled = 0;
+        Test1SubcommandBase.ValidateCalled = 0;
+        var c2 = CommandLineParser.Parse<Test1Cmd>(["base", "sub2"]);
+        Assert.Equal("base", c2.Base);
+        Assert.IsType<Test1Subcommand2>(c2.Subcommand);
+        Assert.Equal(1, Test1Cmd.ValidateCalled);
+        Assert.Equal(0, Test1SubcommandBase.ValidateCalled);
     }
 }
