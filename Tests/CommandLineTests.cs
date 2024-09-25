@@ -88,7 +88,7 @@ public sealed class CmdLineTests
         catch (CommandLineParseException e)
         {
             Assert.Equal("The specified command or option, --blah, is not recognized.", e.Message);
-            Assert.Equal("The specified command or option, --blah, is not recognized.", e.GetColoredMessage().ToString());
+            Assert.Equal("The specified command or option, --blah, is not recognized.", e.ColoredMessage.ToString());
         }
     }
 
