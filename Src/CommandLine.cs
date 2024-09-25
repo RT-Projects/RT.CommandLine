@@ -1,8 +1,8 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Reflection;
-using RT.Internal;
-using RT.PostBuild;
-using RT.Util;
 using RT.Util.Consoles;
 using RT.Util.ExtensionMethods;
 using RT.Util.Text;
@@ -17,23 +17,23 @@ namespace RT.CommandLine;
 ///         The following conditions must be met by the class wishing to receive the options and parameters:</para>
 ///     <list type="bullet">
 ///         <item><description>
-///             It must be a reference type (a class), must have <see cref="CommandLineAttribute"/>, and it must have a
-///             parameterless constructor (unless it has subcommands, see below).</description></item>
+///             It must be a reference type (a class) and it must have a parameterless constructor.</description></item>
 ///         <item><description>
 ///             <para>
 ///                 Every field in the class must have one of the following custom attributes:</para>
 ///             <list type="bullet">
 ///                 <item><description>
 ///                     <see cref="IsPositionalAttribute"/> (allowed for all supported types except <c>bool</c>) — specifies
-///                     that the parameter is positional; the user specifies the value(s) in place without an option preceding
-///                     it.</description></item>
+///                     that the field is a positional parameter; the user specifies this as a single parameter without any
+///                     extra syntax.</description></item>
 ///                 <item><description>
-///                     <see cref="OptionAttribute"/> (allowed for all supported types) — specifies that the parameter invoked
-///                     by an option, e.g. <c>-x</c>, which may or may not be followed by a value. (This does not imply that
-///                     the parameter is necessarily optional.)</description></item>
+///                     <see cref="OptionAttribute"/> (allowed for all supported types except abstract classes) — specifies
+///                     that the field is a parameter invoked by an option, e.g. <c>-x</c>. (This does not imply that the
+///                     parameter is necessarily optional.)</description></item>
 ///                 <item><description>
-///                     <see cref="EnumOptionsAttribute"/> (allowed for enum types only) — specifies that the parameter can be
-///                     invoked by one of several options, which are specified on the enum values in the enum type.</description></item>
+///                     <see cref="EnumOptionsAttribute"/> (allowed for enum types only) — specifies that the field is a
+///                     parameter that can be invoked by one of several options, which are specified on the enum values in the
+///                     enum type.</description></item>
 ///                 <item><description>
 ///                     <see cref="IgnoreAttribute"/> — specifies that <see cref="CommandLineParser"/> shall completely ignore
 ///                     the field.</description></item></list></description></item>
@@ -57,10 +57,14 @@ namespace RT.CommandLine;
 ///                     field can be positional (<see cref="IsPositionalAttribute"/>) or not (<see cref="OptionAttribute"/>).</description></item>
 ///                 <item><description>
 ///                     <c>string[]</c>. The field can be positional (<see cref="IsPositionalAttribute"/>) or not (<see
-///                     cref="OptionAttribute"/>), but if it is positional, it must be the last positional parameter.</description></item>
+///                     cref="OptionAttribute"/>), but if it is positional, it must be the last field in the class.</description></item>
 ///                 <item><description>
 ///                     <c>bool</c>. The field must have an <see cref="OptionAttribute"/> and cannot be positional or
 ///                     mandatory.</description></item>
+///                 <item><description>
+///                     An abstract class with the <see cref="CommandGroupAttribute"/>. The field must be the last field in
+///                     the class and must be marked positional (<see cref="IsPositionalAttribute"/>). The abstract class must
+///                     have at least two derived classes, each with a <see cref="CommandNameAttribute"/>.</description></item>
 ///                 <item><description>
 ///                     <para>
 ///                         Any enum type. There are three ways that enum types can be used. To explain these, the following
@@ -84,7 +88,7 @@ namespace RT.CommandLine;
 ///                                 }</code></description></item>
 ///                         <item><description>
 ///                             <see cref="OptionAttribute"/> — The user can select an enum value by specifying an option
-///                             followed by a parameter that identifies the enum value (e.g. <c>-f plain</c> or <c>-f
+///                             followed by a parameter that identifies the enum value (e.g. <c>-x plain</c> or <c>-x
 ///                             xml</c>). As above, every value in the enum type must have a <see
 ///                             cref="CommandNameAttribute"/> to specify the name by which that enum value is selected.</description></item>
 ///                         <item><description>
@@ -108,68 +112,29 @@ namespace RT.CommandLine;
 ///                             value may omit the <see cref="CommandNameAttribute"/> or <see cref="OptionAttribute"/>.</description></item></list></description></item></list></description></item>
 ///         <item><description>
 ///             <para>
-///                 Every field must have documentation or be explicitly marked with <see cref="UndocumentedAttribute"/>
-///                 (except for fields that use <see cref="EnumOptionsAttribute"/> or <see cref="IgnoreAttribute"/>). For
-///                 every field whose type is an enum type, the values in the enum type must also have documentation or <see
+///                 Every field must have documentation or be explicitly marked with <see cref="UndocumentedAttribute"/>,
+///                 except for fields that use <see cref="EnumOptionsAttribute"/> or <see cref="IgnoreAttribute"/>. For every
+///                 field whose type is an enum type, the values in the enum type must also have documentation or <see
 ///                 cref="UndocumentedAttribute"/>, except for the enum value that corresponds to the field’s default value if
 ///                 the field is not mandatory.</para>
 ///             <para>
 ///                 Documentation is provided in one of the following ways:</para>
 ///             <list type="bullet">
 ///                 <item><description>
-///                     Monolingual, translation-agnostic (unlocalizable) applications use the <see
-///                     cref="DocumentationAttribute"/> to specify documentation directly.</description></item></list></description></item>
+///                     Monolingual, translation-agnostic (unlocalisable) applications use the <see
+///                     cref="DocumentationAttribute"/> to specify documentation directly.</description></item>
+///                 <item><description>
+///                     <para>
+///                         Translatable applications must declare methods with the following signature:</para>
+///                     <code>
+///                         static string FieldNameDoc(Translation)</code>
+///                     <para>
+///                         The first parameter must be of the same type as the object passed in for the <c>applicationTr</c>
+///                         parameter of <see cref="Parse"/>. The name of the method is the name of the field or enum value
+///                         followed by <c>Doc</c>. The return value is the translated string.</para></description></item></list></description></item>
 ///         <item><description>
 ///             <see cref="IsPositionalAttribute"/> and <see cref="IsMandatoryAttribute"/> can be used together. However, a
-///             positional field can only be made mandatory if all the positional fields preceding it are also mandatory.</description></item></list>
-///     <para>
-///         Subcommands can be implemented by using derived classes. For example, in order to allow the user to invoke
-///         commands of the following form:</para>
-///     <code>
-///         MyTool.exe create new_item
-///         MyTool.exe rename old_name new_name</code>
-///     <para>
-///         you would declare the following classes:</para>
-///     <code>
-///         [CommandLine]
-///         abstract class CmdBase { }
-///
-///         [CommandName("create")]
-///         sealed class CmdCreate : CmdBase
-///         {
-///             [IsPositional, IsMandatory]
-///             public string ItemName;
-///         }
-///
-///         [CommandName("rename")]
-///         sealed class CmdRename : CmdBase
-///         {
-///             [IsPositional, IsMandatory]
-///             public string OldName;
-///             [IsPositional, IsMandatory]
-///             public string NewName;
-///         }</code>
-///     <para>
-///         In this example, we have omitted the documentation attributes, but in practice they would be required. The
-///         following points are of note here:</para>
-///     <list type="bullet">
-///         <item><description>
-///             <para>
-///                 The class <c>CmdBase</c> is abstract to indicate that the subcommand is mandatory. The class could be made
-///                 non-abstract to indicate that the subcommand is optional.</para></description></item>
-///         <item><description>
-///             <para>
-///                 The class <c>CmdBase</c> does not need to have a parameterless constructor because only <c>CmdCreate</c>
-///                 and <c>CmdRename</c> would actually be instantiated by CommandLineParser. However, if it were
-///                 non-abstract, it would need a parameterless constructor.</para></description></item>
-///         <item><description>
-///             <para>
-///                 Parameters that pertain to all subcommands can be added in <c>CmdBase</c> and the user would specify those
-///                 before the command name.</para></description></item>
-///         <item><description>
-///             <para>
-///                 You can have any arbitrary multi-level class hierarchy. Only classes marked with <see
-///                 cref="CommandNameAttribute"/> become subcommands.</para></description></item></list></remarks>
+///             positional field can only be made mandatory if all the positional fields preceding it are also mandatory.</description></item></list></remarks>
 public static class CommandLineParser
 {
     /// <summary>
@@ -179,15 +144,19 @@ public static class CommandLineParser
     ///     The class containing the fields and attributes which define the command-line syntax.</typeparam>
     /// <param name="args">
     ///     The command-line arguments to be parsed.</param>
+    /// <param name="applicationTr">
+    ///     Specifies the application’s translation object which contains the localised strings that document the command-line
+    ///     options and commands. This object is passed in to the <c>FieldNameDoc</c> methods described in the documentation
+    ///     for <see cref="CommandLineParser"/>. This should be <c>null</c> for monoligual applications.</param>
     /// <param name="helpProcessor">
     ///     Specifies a callback which is invoked on every documentation string retrieved from the <see
     ///     cref="DocumentationAttribute"/>s to generate the help text. This callback can modify the text arbitrarily.</param>
     /// <returns>
     ///     An instance of the class <typeparamref name="TArgs"/> containing the options and parameters specified by the user
     ///     on the command line.</returns>
-    public static TArgs Parse<TArgs>(string[] args, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor = null)
+    public static TArgs Parse<TArgs>(string[] args, TranslationBase applicationTr = null, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor = null)
     {
-        return (TArgs) parseCommandLine(getCommandInfo(typeof(TArgs)), args, 0, helpProcessor, false);
+        return (TArgs) parseCommandLine(args, typeof(TArgs), 0, applicationTr, helpProcessor);
     }
 
     /// <summary>
@@ -198,36 +167,73 @@ public static class CommandLineParser
     ///     The class containing the fields and attributes which define the command-line syntax.</typeparam>
     /// <param name="args">
     ///     The command-line arguments to be parsed.</param>
-    /// <param name="cmdLineTr">
-    ///     Specifies a translation object that contains the localized strings for CommandLineParser’s own text.</param>
+    /// <param name="applicationTr">
+    ///     Specifies the application’s translation object which contains the localised strings that document the command-line
+    ///     options and commands. This object is passed in to the FieldNameDoc() methods described in the documentation for
+    ///     <see cref="CommandLineParser"/>. This should be null for monoligual applications.</param>
     /// <param name="helpProcessor">
     ///     Specifies a callback which is invoked on every documentation string retrieved from the <see
     ///     cref="DocumentationAttribute"/>s to generate the help text. This callback can modify the text arbitrarily.</param>
     /// <returns>
     ///     An instance of the class <typeparamref name="TArgs"/> containing the options and parameters specified by the user
     ///     on the command line.</returns>
-    public static TArgs ParseOrWriteUsageToConsole<TArgs>(string[] args, Translation cmdLineTr = null, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor = null)
+    public static TArgs ParseOrWriteUsageToConsole<TArgs>(string[] args, TranslationBase applicationTr = null, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor = null)
     {
         try
         {
-            return Parse<TArgs>(args, helpProcessor);
+            return (TArgs) parseCommandLine(args, typeof(TArgs), 0, applicationTr, helpProcessor);
         }
         catch (CommandLineParseException e)
         {
-            e.WriteUsageInfoToConsole(cmdLineTr, helpProcessor);
+            e.WriteUsageInfoToConsole();
             return default(TArgs);
         }
     }
 
-    private static CommandInfo getCommandInfo(Type type)
+    private sealed class positionalParameterInfo
     {
-        return new CommandInfo { Elements = getCommandLineElements(type).ToArray(), Type = type };
+        public Action ProcessParameter;
+        public Action ProcessEndOfParameters;
     }
 
-    private static IEnumerable<CmdLineElement> getCommandLineElements(Type type)
+    /// <summary>
+    ///     Generates the help screen for this command line.</summary>
+    /// <typeparam name="TArgs">
+    ///     The class containing the fields and attributes which define the command-line syntax.</typeparam>
+    /// <param name="applicationTr">
+    ///     Specifies the application’s translation object which contains the localised strings that document the command-line
+    ///     options and commands. This object is passed in to the <c>FieldNameDoc</c> methods described in the documentation
+    ///     for <see cref="CommandLineParser"/>. This should be <c>null</c> for monoligual applications.</param>
+    /// <param name="commandLineTr">
+    ///     The instance containing the translation of <see cref="CommandLineParser"/>’s own text, or <c>null</c> for English.</param>
+    /// <param name="wrapWidth">
+    ///     The character width at which the output should be word-wrapped. The default (<c>null</c>) uses <see
+    ///     cref="ConsoleUtil.WrapToWidth"/>.</param>
+    /// <param name="subType">
+    ///     Optionally, a class that is used as a subcommand within the command-line syntax. Generates help for the
+    ///     subcommand.</param>
+    /// <param name="helpProcessor">
+    ///     Specifies a callback which is invoked on every documentation string retrieved from the <see
+    ///     cref="DocumentationAttribute"/>s to generate the help text. This callback can modify the text arbitrarily.</param>
+    public static ConsoleColoredString GenerateHelp<TArgs>(TranslationBase applicationTr = null, Translation commandLineTr = null, int? wrapWidth = null, Type subType = null, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor = null)
     {
+        return getHelpGenerator(subType ?? typeof(TArgs), applicationTr, helpProcessor)(commandLineTr, wrapWidth ?? ConsoleUtil.WrapToWidth());
+    }
+
+    private static object parseCommandLine(string[] args, Type type, int i, TranslationBase applicationTr, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
+    {
+        if (i < args.Length)
+            if (args[i] == "-?" || args[i] == "/?" || args[i] == "--?" || args[i] == "/h" || args[i] == "--help" || args[i] == "-help" || args[i] == "help")
+                throw new CommandLineHelpRequestedException(getHelpGenerator(type, applicationTr, helpProcessor));
+
+        var ret = Activator.CreateInstance(type, true);
+        var options = new Dictionary<string, Action>();
+        var positionals = new List<positionalParameterInfo>();
+        var missingMandatories = new List<FieldInfo>();
+        FieldInfo swallowingField = null;
         var haveSeenOptionalPositional = false;
-        foreach (var fieldForeach in getEligibleFields(type))
+
+        foreach (var fieldForeach in type.GetFields())
         {
             var field = fieldForeach; // This is necessary for the lambda expressions to work
 
@@ -235,6 +241,7 @@ public static class CommandLineParser
                 continue;
 
             var positional = field.IsDefined<IsPositionalAttribute>();
+            var option = field.GetCustomAttributes<OptionAttribute>().FirstOrDefault();
             var mandatory = field.IsDefined<IsMandatoryAttribute>();
 
             if (positional && mandatory && haveSeenOptionalPositional)
@@ -243,130 +250,251 @@ public static class CommandLineParser
             if (positional && !mandatory)
                 haveSeenOptionalPositional = true;
 
+            if (mandatory)
+                missingMandatories.Add(field);
+
             // ### ENUM fields
             if (field.FieldType.IsEnum)
             {
                 // ### ENUM fields, positional
                 if (positional)
-                    yield return new CmdLineEnumFieldPositional { IsMandatory = mandatory, Field = field };
-
-                // ### ENUM fields, non-positional
+                {
+                    positionals.Add(new positionalParameterInfo
+                    {
+                        ProcessParameter = () =>
+                        {
+                            positionals.RemoveAt(0);
+                            missingMandatories.Remove(field);
+                            foreach (var enumField in field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public))
+                            {
+                                if (enumField.GetCustomAttributes<CommandNameAttribute>().First().Names.Any(c => c.Equals(args[i], StringComparison.OrdinalIgnoreCase)))
+                                {
+                                    field.SetValue(ret, enumField.GetValue(null));
+                                    i++;
+                                    return;
+                                }
+                            }
+                            throw new UnrecognizedCommandOrOptionException(args[i], getHelpGenerator(type, applicationTr, helpProcessor));
+                        },
+                        ProcessEndOfParameters = () =>
+                        {
+                            if (mandatory)
+                                throw new MissingParameterException(field, null, false, getHelpGenerator(type, applicationTr, helpProcessor));
+                        }
+                    });
+                }
+                // ### ENUM fields
                 else
                 {
                     // Take care of both option+name scheme (e.g. “-x foo -x bar”) and option scheme (e.g. “-x -y”)
                     var behavior = field.GetCustomAttributes<EnumOptionsAttribute>().Select(eoa => eoa.Behavior).FirstOrDefault(EnumBehavior.SingleValue);
                     var underlyingType = field.FieldType.GetEnumUnderlyingType();
-                    var option = field.GetCustomAttributes<OptionAttribute>().FirstOrDefault();
-                    if (option == null)
-                    {
-                        var enumFields = field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public)
-                            .SelectMany(f => f.GetOrderedOptionAttributeNames().Select(name => Ut.KeyValuePair(name, f.GetRawConstantValue())))
-                            .ToArray();
-                        yield return new CmdLineEnumOptions
+
+                    var infos = option == null
+                        ? field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public).Select(enumField => new
                         {
-                            Behavior = behavior,
-                            Field = field,
-                            IsMandatory = mandatory,
-                            Options = enumFields.Select(inf => inf.Key).ToArray(),
-                            OptionToValue = enumFields.ToDictionary()
-                        };
-                    }
-                    else
-                    {
-                        yield return new CmdLineEnumOptionWithNames
+                            Options = enumField.GetOrderedOptionAttributeNames(),
+                            NeedCommandName = false,
+                            GetEnumValue = Ut.Lambda((string commandName) => enumField.GetRawConstantValue())
+                        })
+                        : Ut.NewArray(new
                         {
-                            Behavior = behavior,
                             Options = option.Names,
-                            Field = field,
-                            IsMandatory = mandatory,
-                            NameToValue = field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public)
-                                .SelectMany(f => f.GetCustomAttributes<CommandNameAttribute>().SelectMany(cna => cna.Names).Select(name => Ut.KeyValuePair(name, f.GetRawConstantValue())))
-                                .ToDictionary()
-                        };
+                            NeedCommandName = true,
+                            GetEnumValue = Ut.Lambda((string commandName) =>
+                            {
+                                var enumField = field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public)
+                                    .FirstOrDefault(ef => ef.GetCustomAttributes<CommandNameAttribute>().Any(cna => cna.Names.Contains(commandName)));
+                                if (enumField == null)
+                                    throw new UnrecognizedCommandOrOptionException(commandName, getHelpGenerator(type, applicationTr, helpProcessor));
+                                return enumField.GetRawConstantValue();
+                            })
+                        }).AsEnumerable();
+
+                    object prev = null;
+                    string prevOptionOrCommand = null;
+
+                    foreach (var infForeach in infos)
+                    {
+                        var inf = infForeach;
+                        if (inf.Options == null)
+                            // Assume that this is the default option
+                            continue;
+                        foreach (var oForeach in inf.Options)
+                        {
+                            var o = oForeach;
+                            options[o] = () =>
+                            {
+                                i++;
+                                string commandName = null;
+                                if (inf.NeedCommandName)
+                                {
+                                    if (i >= args.Length)
+                                        throw new IncompleteOptionException(o, getHelpGenerator(type, applicationTr, helpProcessor));
+                                    commandName = args[i];
+                                    i++;
+                                }
+                                missingMandatories.Remove(field);
+                                var value = inf.GetEnumValue(commandName);
+
+                                if (behavior == EnumBehavior.SingleValue)
+                                {
+                                    if (prev == null)
+                                    {
+                                        prev = value;
+                                        prevOptionOrCommand = commandName ?? o;
+                                        field.SetValue(ret, value);
+                                    }
+                                    else if (prev.Equals(value))
+                                    {
+                                        // Don’t throw an error if the same value is simply specified multiple times. Just ignore the second occurrence
+                                    }
+                                    else
+                                    {
+                                        // Since only a single value is allowed, throw an error if another value is specified later
+                                        throw new IncompatibleCommandOrOptionException(prevOptionOrCommand, commandName ?? o, getHelpGenerator(type, applicationTr, helpProcessor));
+                                    }
+                                }
+                                else
+                                {
+                                    if (underlyingType == typeof(ulong))
+                                        prev = (prev == null ? 0UL : (ulong) prev) | (ulong) value;
+                                    else
+                                        prev = (prev == null ? 0L : Convert.ToInt64(prev)) | Convert.ToInt64(value);
+                                    field.SetValue(ret, Convert.ChangeType(prev, underlyingType));
+                                }
+                            };
+                        }
                     }
                 }
             }
-
             // ### BOOL fields
             else if (field.FieldType == typeof(bool))
-                yield return new CmdLineBoolOption { IsMandatory = mandatory, Field = field, Options = field.GetOrderedOptionAttributeNames() };
-
+            {
+                foreach (var o in field.GetOrderedOptionAttributeNames())
+                    options[o] = () => { field.SetValue(ret, true); i++; missingMandatories.Remove(field); };
+            }
             // ### STRING and INTEGER fields (including nullable)
             else if (field.FieldType == typeof(string) || ExactConvert.IsTrueIntegerType(field.FieldType) || ExactConvert.IsTrueIntegerNullableType(field.FieldType) ||
                 field.FieldType == typeof(float) || field.FieldType == typeof(float?) || field.FieldType == typeof(double) || field.FieldType == typeof(double?))
             {
                 if (positional)
-                    yield return new CmdLineOtherPositional { Field = field, IsMandatory = mandatory };
-                else
-                    yield return new CmdLineOtherOption { Field = field, IsMandatory = mandatory, Options = field.GetOrderedOptionAttributeNames() };
-            }
+                {
+                    positionals.Add(new positionalParameterInfo
+                    {
+                        ProcessParameter = () =>
+                        {
+                            if (!convertStringAndSetField(args[i], ret, field))
+                                throw new InvalidNumericParameterException(field.Name, getHelpGenerator(type, applicationTr, helpProcessor));
 
+                            positionals.RemoveAt(0);
+                            missingMandatories.Remove(field);
+                            i++;
+                        },
+                        ProcessEndOfParameters = () =>
+                        {
+                            if (mandatory)
+                                throw new MissingParameterException(field, null, false, getHelpGenerator(type, applicationTr, helpProcessor));
+                        }
+                    });
+                }
+                else
+                {
+                    foreach (var oForeach in field.GetOrderedOptionAttributeNames())
+                    {
+                        var o = oForeach;
+                        options[o] = () =>
+                        {
+                            i++;
+                            if (i >= args.Length)
+                                throw new IncompleteOptionException(o, getHelpGenerator(type, applicationTr, helpProcessor));
+
+                            if (!convertStringAndSetField(args[i], ret, field))
+                                throw new InvalidNumericParameterException(field.Name, getHelpGenerator(type, applicationTr, helpProcessor));
+
+                            i++;
+                            missingMandatories.Remove(field);
+                        };
+                    }
+                }
+            }
             // ### STRING[] fields
             else if (field.FieldType == typeof(string[]))
             {
                 if (positional)
-                    yield return new CmdLineStringArrayPositional { Field = field, IsMandatory = mandatory };
+                {
+                    positionals.Add(new positionalParameterInfo
+                    {
+                        ProcessParameter = () =>
+                        {
+                            missingMandatories.Remove(field);
+                            var prev = (string[]) field.GetValue(ret);
+                            if (prev == null || prev.Length == 0)
+                                field.SetValue(ret, new string[] { args[i] });
+                            else
+                                field.SetValue(ret, prev.Concat(args[i]).ToArray());
+                            i++;
+                        },
+                        ProcessEndOfParameters = () =>
+                        {
+                            if (field.GetValue(ret) == null)
+                                field.SetValue(ret, new string[] { });
+                        }
+                    });
+                }
                 else
-                    yield return new CmdLineStringArrayOption { Field = field, IsMandatory = mandatory, Options = field.GetOrderedOptionAttributeNames() };
+                {
+                    string[] prev = null;
+                    foreach (var oForeach in field.GetOrderedOptionAttributeNames())
+                    {
+                        var o = oForeach;
+                        options[o] = () =>
+                        {
+                            i++;
+                            if (i >= args.Length)
+                                throw new IncompleteOptionException(o, getHelpGenerator(type, applicationTr, helpProcessor));
+                            prev = (prev == null || prev.Length == 0)
+                                ? new string[] { args[i] }
+                                : prev.Concat(args[i]).ToArray();
+                            field.SetValue(ret, prev);
+                            i++;
+                            missingMandatories.Remove(field);
+                        };
+                    }
+                }
+            }
+            // ### Command-group classes
+            else if (field.FieldType.IsClass && field.FieldType.IsDefined<CommandGroupAttribute>())
+            {
+                swallowingField = field;
+                positionals.Add(new positionalParameterInfo
+                {
+                    ProcessParameter = () =>
+                    {
+                        missingMandatories.Remove(field);
+                        positionals.RemoveAt(0);
+                        foreach (var subclass in field.FieldType.Assembly.GetTypes().Where(t => !t.IsAbstract && t.IsSubclassOf(field.FieldType)))
+                            if (subclass.GetCustomAttributes<CommandNameAttribute>().First().Names.Any(c => c.Equals(args[i], StringComparison.OrdinalIgnoreCase)))
+                            {
+                                field.SetValue(ret, parseCommandLine(args, subclass, i + 1, applicationTr, helpProcessor));
+                                i = args.Length;
+                                return;
+                            }
+                        throw new UnrecognizedCommandOrOptionException(args[i], getHelpGenerator(type, applicationTr, helpProcessor));
+                    },
+                    ProcessEndOfParameters = () =>
+                    {
+                        if (mandatory)
+                            throw new MissingParameterException(field, null, false, getHelpGenerator(type, applicationTr, helpProcessor));
+                    }
+                });
             }
             else
                 // This only happens if the post-build check didn't run
                 throw new InternalErrorException("{0}.{1} is not of a supported type.".Fmt(type.FullName, field.Name));
         }
 
-        // ### Command names
-
-        // See if the class has subclasses that represent subcommands
-        var derivedTypes = getDirectSubcommands(type);
-        if (derivedTypes.Length > 0)
-        {
-            yield return new CmdLineSubcommand
-            {
-                IsMandatory = type.IsAbstract,
-                Type = type,
-                Subcommands = derivedTypes.Select(t => new SubcommandInfo
-                {
-                    Elements = getCommandLineElements(t).ToArray(),
-                    Names = t.GetCustomAttributes<CommandNameAttribute>().First().Names,
-                    Type = t
-                }).ToArray()
-            };
-        }
-    }
-
-    private static FieldInfo[] getEligibleFields(Type type)
-    {
-        var bindingFlags = BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-
-        // Include this type, plus all base types in the chain until we find one with CommandNameAttribute or CommandLineAttribute
-        var types = type.SelectChain(t => t.BaseType)
-            .TakeWhile(t => t == type || (t != typeof(object) && !t.IsDefined<CommandNameAttribute>() && !t.IsDefined<CommandLineAttribute>()));
-        // Starting with the deepest base type, get all fields from all the above types
-        var fields = types.Reverse().SelectMany(t => t.GetFields(bindingFlags)).ToArray();
-
-        return fields;
-    }
-
-    private static Type[] getDirectSubcommands(Type type)
-    {
-        var types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(asm => asm.GetTypes()).Where(t => !t.IsGenericTypeDefinition && t.IsSubclassOf(type) && t.IsDefined<CommandNameAttribute>()).ToList();
-        types.RemoveAll(t => types.Any(t.IsSubclassOf));
-        return types.ToArray();
-    }
-
-    private static object parseCommandLine(CommandInfo cmd, string[] args, int i, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor, bool suppressValidation)
-    {
-        if (i < args.Length)
-            if (args[i] == "-?" || args[i] == "/?" || args[i] == "--?" || args[i] == "/h" || args[i] == "--help" || args[i] == "-help" || args[i] == "help")
-                throw new CommandLineHelpRequestedException(cmd);
-
-        var elements = cmd.Elements;
-        var missingMandatories = new HashSet<CmdLineElement>(elements.Where(e => e.IsMandatory));
-        var positionals = elements.Where(e => e.IsPositional).ToQueue();
-        var actionsToPerform = new List<Action<object>>();
-
         bool suppressOptions = false;
-        object ret = null;
 
         while (i < args.Length)
         {
@@ -377,156 +505,306 @@ public static class CommandLineParser
             }
             else if (!suppressOptions && args[i].StartsWith('-'))
             {
-                CmdLineElement el = null;
-                foreach (var element in elements.Where(e => !e.IsPositional))
-                {
-                    if (element.ProcessParameter(args, ref i, actionsToPerform, suppressOptions, helpProcessor, cmd))
-                    {
-                        el = element;
-                        break;
-                    }
-                }
-                if (el == null)
-                    throw new UnrecognizedCommandOrOptionException(args[i], cmd);
-                missingMandatories.Remove(el);
+                if (options.ContainsKey(args[i]))
+                    options[args[i]]();
+                else
+                    throw new UnrecognizedCommandOrOptionException(args[i], getHelpGenerator(type, applicationTr, helpProcessor));
             }
-            else    // positional
+            else
             {
                 if (positionals.Count == 0)
-                    throw new UnexpectedArgumentException(args.Subarray(i), cmd);
-                var positional = positionals.Dequeue();
-                // This should only return true or throw an exception
-                Ut.Assert(positional.ProcessParameter(args, ref i, actionsToPerform, suppressOptions, helpProcessor, cmd));
-                if (positional is CmdLineSubcommand)
-                {
-                    // Special case: recursive call
-                    ret = parseCommandLine(((CmdLineSubcommand) positional).Subcommand, args, i, helpProcessor, suppressValidation || typeof(ICommandLineValidatable).IsAssignableFrom(cmd.Type));
-                    i = args.Length;
-                }
-                else if (positional is CmdLineStringArrayPositional)
-                {
-                    // Special case: this positional remains in the queue forever
-                    positionals.Enqueue(positional);
-                }
-                missingMandatories.Remove(positional);
+                    throw new UnexpectedArgumentException(args.Subarray(i), getHelpGenerator(type, applicationTr, helpProcessor));
+                positionals[0].ProcessParameter();
             }
         }
 
         if (positionals.Count > 0)
-            positionals.Dequeue().ProcessEndOfParameters(actionsToPerform, cmd);
+            positionals[0].ProcessEndOfParameters();
 
-        foreach (var m in missingMandatories)
-            m.ProcessEndOfParameters(actionsToPerform, cmd);
+        if (missingMandatories.Count > 0)
+            throw new MissingParameterException(missingMandatories[0], swallowingField, !missingMandatories[0].IsDefined<IsPositionalAttribute>(), getHelpGenerator(type, applicationTr, helpProcessor));
 
-        if (ret == null)  // there was no subcommand
-            ret = Activator.CreateInstance(cmd.Type, true);
-
-        foreach (var action in actionsToPerform)
-            action(ret);
-
+        Type[] typeParam;
         ConsoleColoredString error = null;
-        if (!suppressValidation && typeof(ICommandLineValidatable).IsAssignableFrom(cmd.Type))
+        if (type.TryGetInterfaceGenericParameters(typeof(ICommandLineValidatable<>), out typeParam))
+        {
+            var tp = typeof(ICommandLineValidatable<>).MakeGenericType(typeParam[0]);
+            if (typeParam[0] != applicationTr.GetType())
+                throw new CommandLineValidationException(@"The type {0} implements {1}, but ApplicationTr is of type {2}. If ApplicationTr is right, the interface implemented should be {3}.".Fmt(
+                    type.FullName,
+                    tp.FullName,
+                    applicationTr.GetType().FullName,
+                    typeof(ICommandLineValidatable<>).MakeGenericType(applicationTr.GetType()).FullName
+                ), getHelpGenerator(type, applicationTr, helpProcessor));
+
+            var meth = tp.GetMethod("Validate");
+            if (meth == null || !meth.GetParameters().Select(p => p.ParameterType).SequenceEqual(new Type[] { typeParam[0] }))
+                throw new CommandLineValidationException(@"Couldn’t find the Validate method in the {0} type.".Fmt(tp.FullName), getHelpGenerator(type, applicationTr, helpProcessor));
+
+            error = (ConsoleColoredString) meth.Invoke(ret, new object[] { applicationTr });
+        }
+        else if (typeof(ICommandLineValidatable).IsAssignableFrom(type))
             error = ((ICommandLineValidatable) ret).Validate();
 
         if (error != null)
-            throw new CommandLineValidationException(error, cmd);
+            throw new CommandLineValidationException(error, getHelpGenerator(type, applicationTr, helpProcessor));
 
         return ret;
     }
 
-    internal static ConsoleColoredString GenerateHelp(CommandInfo cmd, int? wrapWidth = null, Translation tr = null, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor = null)
+    private static bool convertStringAndSetField(string value, object cmdLineObject, FieldInfo field)
+    {
+        object result;
+
+        if (field.FieldType == typeof(string))
+            result = value;
+        else
+        {
+            Type type = field.FieldType.IsGenericType && field.FieldType.GetGenericTypeDefinition() == typeof(Nullable<>)
+                ? field.FieldType.GetGenericArguments()[0]
+                : field.FieldType;
+            if (!ExactConvert.Try(type, value, out result))
+                return false;
+        }
+        field.SetValue(cmdLineObject, result);
+        return true;
+    }
+
+    private static Func<Translation, int, ConsoleColoredString> getHelpGenerator(Type type, TranslationBase applicationTr, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
     {
         helpProcessor = helpProcessor ?? (s => s);
-
-        if (tr == null)
-            tr = new Translation();
-
-        int leftMargin = 3;
-        var wrapToWidth = wrapWidth ?? ConsoleUtil.WrapToWidth();
-
-        var helpString = new List<ConsoleColoredString>();
-        var commandNameAttr = cmd.Type.GetCustomAttributes<CommandNameAttribute>().FirstOrDefault();
-        string commandName = commandNameAttr == null ? Process.GetCurrentProcess().ProcessName : "... " + commandNameAttr.Names.OrderByDescending(c => c.Length).First();
-
-        //
-        //  ##  CONSTRUCT THE “USAGE” LINE
-        //
-        var usage = new List<ConsoleColoredString>();
-        usage.Add(new ConsoleColoredString(tr.Usage + " ", CmdLineColor.UsageLinePrefix));
-        usage.Add(commandName);
-
-        // Options must be listed before positionals because if a positional is a subcommand, all the options must be before it.
-        // Optional positionals must come after mandatory positionals because that is the order they must be specified in.
-        // If any mandatory positional is a subcommand, then you can’t have any optional positionals anyway.
-        var elements = cmd.Elements.Order().ToArray();
-        foreach (var elem in elements)
-            usage.Add(" " + elem.UsageString);
-
-        // Word-wrap the usage line
-        foreach (var line in new ConsoleColoredString(usage.ToArray()).WordWrap(wrapToWidth, tr.Usage.Length + 1))
+        return (tr, wrapWidth) =>
         {
-            helpString.Add(line);
-            helpString.Add(ConsoleColoredString.NewLine);
-        }
-        helpString.Add(ConsoleColoredString.NewLine);
+            if (tr == null)
+                tr = new Translation();
 
-        //
-        //  ##  CONSTRUCT THE TABLES
-        //
-        var anyCommandsWithSuboptions = false;
+            int leftMargin = 3;
 
-        // Word-wrap the documentation for the command (if any)
-        var doc = cmd.Type.GetDocumentation(cmd.Type, helpProcessor);
-        foreach (var line in doc.WordWrap(wrapToWidth))
-        {
-            helpString.Add(line);
-            helpString.Add(ConsoleColoredString.NewLine);
-        }
+            var helpString = new List<ConsoleColoredString>();
+            var commandNameAttr = type.GetCustomAttributes<CommandNameAttribute>().FirstOrDefault();
+            string commandName = commandNameAttr == null ? Path.GetFileNameWithoutExtension(Assembly.GetEntryAssembly().Location) : "... " + commandNameAttr.Names.OrderByDescending(c => c.Length).First();
 
-        // Table of required parameters
-        if (elements.Any(e => e.IsMandatory))
-        {
-            var requiredParamsTable = new TextTable { MaxWidth = wrapToWidth - leftMargin, ColumnSpacing = 3, RowSpacing = 1, LeftMargin = leftMargin };
-            int requiredRow = 0;
-            foreach (var f in elements.Where(e => e.IsMandatory))
-                anyCommandsWithSuboptions |= f.AddHelpRow(requiredParamsTable, ref requiredRow, helpProcessor);
+            //
+            //  ##  CONSTRUCT THE “USAGE” LINE
+            //
+            var usage = new List<ConsoleColoredString>();
+            usage.Add(new ConsoleColoredString(tr.Usage + " ", CmdLineColor.UsageLinePrefix));
+            usage.Add(commandName);
 
-            helpString.Add(ConsoleColoredString.NewLine);
-            helpString.Add(new ConsoleColoredString(tr.ParametersHeader, CmdLineColor.HelpHeading));
-            helpString.Add(ConsoleColoredString.NewLine);
-            helpString.Add(ConsoleColoredString.NewLine);
-            requiredParamsTable.RemoveEmptyColumns();
-            helpString.Add(requiredParamsTable.ToColoredString());
-        }
+            List<FieldInfo> optionalOptions, mandatoryOptions, optionalPositional, mandatoryPositional;
+            getFieldsForHelp(type, out optionalOptions, out mandatoryOptions, out optionalPositional, out mandatoryPositional);
 
-        // Table of optional parameters
-        if (elements.Any(e => !e.IsMandatory))
-        {
-            var optionalParamsTable = new TextTable { MaxWidth = wrapToWidth - leftMargin, ColumnSpacing = 3, RowSpacing = 1, LeftMargin = leftMargin };
-            int optionalRow = 0;
-            foreach (var f in elements.Where(e => !e.IsMandatory))
-                anyCommandsWithSuboptions |= f.AddHelpRow(optionalParamsTable, ref optionalRow, helpProcessor);
+            // Options must be listed before positionals because if a positional is a subcommand, all the options must be before it.
+            // optionalPositional must come after mandatoryPositional because that is the order they must be specified in.
+            // If any mandatoryPositional is a subcommand, then you can’t have any optionalPositionals anyway.
+            usage.Add(
+                mandatoryOptions.Select(fld => new { Mandatory = true, Field = fld })
+                    .Concat(optionalOptions.Select(fld => new { Mandatory = false, Field = fld }))
+                    .Concat(mandatoryPositional.Select(fld => new { Mandatory = true, Field = fld }))
+                    .Concat(optionalPositional.Select(fld => new { Mandatory = false, Field = fld }))
+                    .Select(f => " " + f.Field.FormatParameterUsage(f.Mandatory))
+                    .JoinColoredString());
 
-            helpString.Add(ConsoleColoredString.NewLine);
-            helpString.Add(new ConsoleColoredString(tr.OptionsHeader, CmdLineColor.HelpHeading));
-            helpString.Add(ConsoleColoredString.NewLine);
-            helpString.Add(ConsoleColoredString.NewLine);
-            optionalParamsTable.RemoveEmptyColumns();
-            helpString.Add(optionalParamsTable.ToColoredString());
-        }
-
-        // “This command accepts further arguments on the command line.”
-        if (anyCommandsWithSuboptions)
-        {
-            helpString.Add(ConsoleColoredString.NewLine);
-            foreach (var line in (new ConsoleColoredString("* ", CmdLineColor.SubcommandsPresentAsterisk) + ConsoleColoredString.FromEggsNode(EggsML.Parse(tr.AdditionalOptions))).WordWrap(wrapToWidth, 2))
+            // Word-wrap the usage line
+            foreach (var line in new ConsoleColoredString(usage.ToArray()).WordWrap(wrapWidth, tr.Usage.Translation.Length + 1))
             {
                 helpString.Add(line);
                 helpString.Add(ConsoleColoredString.NewLine);
             }
-        }
+            helpString.Add(ConsoleColoredString.NewLine);
 
-        return new ConsoleColoredString(helpString.ToArray());
+            //
+            //  ##  CONSTRUCT THE TABLES
+            //
+
+            var anyCommandsWithSuboptions = false;
+            var requiredParamsTable = new TextTable { MaxWidth = wrapWidth - leftMargin, ColumnSpacing = 3, RowSpacing = 1, LeftMargin = leftMargin };
+            int requiredRow = 0;
+            foreach (var f in mandatoryPositional.Select(fld => new { Positional = true, Field = fld }).Concat(mandatoryOptions.Select(fld => new { Positional = false, Field = fld })))
+                anyCommandsWithSuboptions |= createParameterHelpRow(ref requiredRow, requiredParamsTable, f.Field, f.Positional, type, applicationTr, helpProcessor);
+
+            var optionalParamsTable = new TextTable { MaxWidth = wrapWidth - leftMargin, ColumnSpacing = 3, RowSpacing = 1, LeftMargin = leftMargin };
+            int optionalRow = 0;
+            foreach (var f in optionalPositional.Select(fld => new { Positional = true, Field = fld }).Concat(optionalOptions.Select(fld => new { Positional = false, Field = fld })))
+                anyCommandsWithSuboptions |= createParameterHelpRow(ref optionalRow, optionalParamsTable, f.Field, f.Positional, type, applicationTr, helpProcessor);
+
+            // Word-wrap the documentation for the command (if any)
+            var doc = getDocumentation(type, type, applicationTr, helpProcessor);
+            foreach (var line in doc.WordWrap(wrapWidth))
+            {
+                helpString.Add(line);
+                helpString.Add(ConsoleColoredString.NewLine);
+            }
+
+            // Table of required parameters
+            if (mandatoryOptions.Any() || mandatoryPositional.Any())
+            {
+                helpString.Add(ConsoleColoredString.NewLine);
+                helpString.Add(new ConsoleColoredString(tr.ParametersHeader, CmdLineColor.HelpHeading));
+                helpString.Add(ConsoleColoredString.NewLine);
+                helpString.Add(ConsoleColoredString.NewLine);
+                requiredParamsTable.RemoveEmptyColumns();
+                helpString.Add(requiredParamsTable.ToColoredString());
+            }
+
+            // Table of optional parameters
+            if (optionalOptions.Any() || optionalPositional.Any())
+            {
+                helpString.Add(ConsoleColoredString.NewLine);
+                helpString.Add(new ConsoleColoredString(tr.OptionsHeader, CmdLineColor.HelpHeading));
+                helpString.Add(ConsoleColoredString.NewLine);
+                helpString.Add(ConsoleColoredString.NewLine);
+                optionalParamsTable.RemoveEmptyColumns();
+                helpString.Add(optionalParamsTable.ToColoredString());
+            }
+
+            // “This command accepts further arguments on the command line.”
+            if (anyCommandsWithSuboptions)
+            {
+                helpString.Add(ConsoleColoredString.NewLine);
+                foreach (var line in (new ConsoleColoredString("* ", CmdLineColor.SubcommandsPresentAsterisk) + ConsoleColoredString.FromEggsNode(EggsML.Parse(tr.AdditionalOptions.Translation))).WordWrap(wrapWidth, 2))
+                {
+                    helpString.Add(line);
+                    helpString.Add(ConsoleColoredString.NewLine);
+                }
+            }
+
+            return new ConsoleColoredString(helpString.ToArray());
+        };
+    }
+
+    private static bool createParameterHelpRow(ref int row, TextTable table, FieldInfo field, bool positional, Type type, TranslationBase applicationTr, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
+    {
+        var anyCommandsWithSuboptions = false;
+        var cmdName = "<".Color(CmdLineColor.FieldBrackets) + field.Name.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets);
+
+        if (field.FieldType.IsEnum)
+        {
+            // ### ENUM fields, positional
+            if (positional)
+            {
+                var topRow = row;
+                var doc = getDocumentation(field, type, applicationTr, helpProcessor);
+                if (doc.Length > 0 || field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public).All(el => el.IsDefined<UndocumentedAttribute>() || !el.GetCustomAttributes<CommandNameAttribute>().Any()))
+                {
+                    table.SetCell(2, row, doc, colSpan: 4);
+                    row++;
+                }
+                foreach (var el in field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public))
+                {
+                    if (el.IsDefined<UndocumentedAttribute>())
+                        continue;
+                    var attr = el.GetCustomAttributes<CommandNameAttribute>().FirstOrDefault();
+                    if (attr == null)   // skip the default value
+                        continue;
+                    table.SetCell(2, row, attr.Names.Where(n => n.Length <= 2).Select(s => s.Color(CmdLineColor.EnumValue)).JoinColoredString(", "), noWrap: true);
+                    table.SetCell(3, row, attr.Names.Where(n => n.Length > 2).Select(s => s.Color(CmdLineColor.EnumValue)).JoinColoredString(Environment.NewLine), noWrap: true);
+                    table.SetCell(4, row, getDocumentation(el, type, applicationTr, helpProcessor), colSpan: 2);
+                    row++;
+                }
+                table.SetCell(0, topRow, cmdName, noWrap: true, colSpan: 2, rowSpan: row - topRow);
+            }
+            // ### ENUM fields, “-x foo” scheme
+            else if (field.IsDefined<OptionAttribute>())
+            {
+                var topRow = row;
+                row++;
+                foreach (var el in field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public).Where(e => !e.IsDefined<UndocumentedAttribute>()))
+                {
+                    var attr = el.GetCustomAttributes<CommandNameAttribute>().FirstOrDefault();
+                    if (attr == null)   // skip the default value
+                        continue;
+                    table.SetCell(3, row, attr.Names.Where(n => n.Length <= 2).Select(s => s.Color(CmdLineColor.EnumValue)).JoinColoredString(", "), noWrap: true);
+                    table.SetCell(4, row, attr.Names.Where(n => n.Length > 2).Select(s => s.Color(CmdLineColor.EnumValue)).JoinColoredString(Environment.NewLine), noWrap: true);
+                    table.SetCell(5, row, getDocumentation(el, type, applicationTr, helpProcessor));
+                    row++;
+                }
+                if (row == topRow + 1)
+                    throw new InvalidOperationException("Enum type {2}.{3} has no values (apart from default value for field {0}.{1}).".Fmt(field.DeclaringType.FullName, field.Name, field.FieldType.DeclaringType.FullName, field.FieldType));
+                table.SetCell(0, topRow, field.GetOrderedOptionAttributeNames().Where(o => !o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(", "), noWrap: true, rowSpan: row - topRow);
+                table.SetCell(1, topRow, field.GetOrderedOptionAttributeNames().Where(o => o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(Environment.NewLine), noWrap: true, rowSpan: row - topRow);
+                table.SetCell(2, topRow, getDocumentation(field, type, applicationTr, helpProcessor), colSpan: 4);
+                table.SetCell(2, topRow + 1, cmdName, noWrap: true, rowSpan: row - topRow - 1);
+            }
+            // ### ENUM fields, “-x” scheme
+            else
+            {
+                foreach (var el in field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public).Where(e => e.IsDefined<OptionAttribute>() && !e.IsDefined<UndocumentedAttribute>()))
+                {
+                    table.SetCell(0, row, el.GetOrderedOptionAttributeNames().Where(o => !o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(", "), noWrap: true);
+                    table.SetCell(1, row, el.GetOrderedOptionAttributeNames().Where(o => o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(Environment.NewLine), noWrap: true);
+                    table.SetCell(2, row, getDocumentation(el, type, applicationTr, helpProcessor), colSpan: 4);
+                    row++;
+                }
+            }
+        }
+        // ### Command-group classes
+        else if (field.FieldType.IsDefined<CommandGroupAttribute>())
+        {
+            int origRow = row;
+            foreach (var ty in field.FieldType.Assembly.GetTypes()
+                .Where(t => t.IsSubclassOf(field.FieldType) && t.IsDefined<CommandNameAttribute>() && !t.IsAbstract && !t.IsDefined<UndocumentedAttribute>())
+                .OrderBy(t => t.GetCustomAttributes<CommandNameAttribute>().First().Names.MinElement(c => c.Length)))
+            {
+                var cell1 = ConsoleColoredString.Empty;
+                var cell2 = ConsoleColoredString.Empty;
+                var suboptions = ty.GetAllFields().Any(fld => !fld.IsDefined<UndocumentedAttribute>());
+                anyCommandsWithSuboptions |= suboptions;
+                var asterisk = suboptions ? "*".Color(CmdLineColor.SubcommandsPresentAsterisk) : ConsoleColoredString.Empty;
+                var names = ty.GetCustomAttributes<CommandNameAttribute>().First().Names;
+                table.SetCell(2, row, names.Where(n => n.Length <= 2).Select(n => n.Color(CmdLineColor.Command) + asterisk).JoinColoredString(", "), noWrap: true);
+                table.SetCell(3, row, names.Where(n => n.Length > 2).Select(n => n.Color(CmdLineColor.Command) + asterisk).JoinColoredString(Environment.NewLine), noWrap: true);
+                table.SetCell(4, row, getDocumentation(ty, ty, applicationTr, helpProcessor), colSpan: 2);
+                row++;
+            }
+            table.SetCell(0, origRow, cmdName, colSpan: 2, rowSpan: row - origRow, noWrap: true);
+        }
+        // ### All other positional parameters
+        else if (positional)
+        {
+            table.SetCell(0, row, cmdName, noWrap: true, colSpan: 2);
+            table.SetCell(2, row, getDocumentation(field, type, applicationTr, helpProcessor), colSpan: 4);
+            row++;
+        }
+        // ### All other non-positional parameters
+        else
+        {
+            table.SetCell(0, row, field.GetOrderedOptionAttributeNames().Where(o => !o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(", "), noWrap: true);
+            table.SetCell(1, row, field.GetOrderedOptionAttributeNames().Where(o => o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(Environment.NewLine), noWrap: true);
+            table.SetCell(2, row, getDocumentation(field, type, applicationTr, helpProcessor), colSpan: 4);
+            row++;
+        }
+        return anyCommandsWithSuboptions;
+    }
+
+    private static void getFieldsForHelp(Type type, out List<FieldInfo> optionalOptions, out List<FieldInfo> mandatoryOptions, out List<FieldInfo> optionalPositional, out List<FieldInfo> mandatoryPositional)
+    {
+        optionalOptions = new List<FieldInfo>();
+        mandatoryOptions = new List<FieldInfo>();
+        optionalPositional = new List<FieldInfo>();
+        mandatoryPositional = new List<FieldInfo>();
+
+        foreach (var field in type.GetFields().Where(f => !f.IsDefined<UndocumentedAttribute>() && !f.IsDefined<IgnoreAttribute>()))
+            (field.IsDefined<IsMandatoryAttribute>()
+                ? (field.IsDefined<IsPositionalAttribute>() ? mandatoryPositional : mandatoryOptions)
+                : (field.IsDefined<IsPositionalAttribute>() ? optionalPositional : optionalOptions)
+            ).Add(field);
+    }
+
+    private static ConsoleColoredString getDocumentation(MemberInfo member, Type inType, TranslationBase applicationTr, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
+    {
+        if (member.IsDefined<DocumentationAttribute>())
+            return helpProcessor(member.GetCustomAttributes<DocumentationAttribute>().Select(d => d.Text ?? "").First());
+        if (applicationTr == null)
+            return "";
+
+        if (!(member is Type) && inType.IsSubclassOf(member.DeclaringType))
+            inType = member.DeclaringType;
+        var meth = inType.GetMethod(member.Name + "Doc", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, new Type[] { applicationTr.GetType() }, null);
+        if (meth == null || meth.ReturnType != typeof(string))
+            return "";
+        var str = (string) meth.Invoke(null, new object[] { applicationTr });
+        return str == null ? "" : helpProcessor(CommandLineParser.Colorize(EggsML.Parse(str)));
     }
 
     #region Post-build step check
@@ -534,42 +812,45 @@ public static class CommandLineParser
     /// <summary>
     ///     Performs safety checks to ensure that the structure of your command-line syntax defining class is valid according
     ///     to the criteria laid out in the documentation of <see cref="CommandLineParser"/>. Run this method as a post-build
-    ///     step to ensure reliability of execution. For an example of use, see <see
-    ///     cref="PostBuildChecker.RunPostBuildChecks"/>.</summary>
+    ///     step to ensure reliability of execution. For an example of use, see <see cref="Ut.RunPostBuildChecks"/>.</summary>
     /// <typeparam name="TArgs">
     ///     The class containing the fields and attributes which define the command-line syntax.</typeparam>
     /// <param name="rep">
     ///     Object to report post-build errors to.</param>
-    public static void PostBuildStep<TArgs>(IPostBuildReporter rep)
+    /// <param name="applicationTrType">
+    ///     The type of the translation object, derived from <see cref="TranslationBase"/>, which would be passed in for the
+    ///     “applicationTr” parameter of <see cref="Parse"/> at normal run-time.</param>
+    public static void PostBuildStep<TArgs>(IPostBuildReporter rep, Type applicationTrType)
     {
-        var type = typeof(TArgs);
-        if (!type.IsDefined<CommandLineAttribute>())
-            rep.Error(@"To use {0} as a command-line type, it must have the [CommandLine] attribute.".Fmt(type.FullName), (type.IsEnum ? "enum " : type.IsInterface ? "interface " : typeof(Delegate).IsAssignableFrom(type) ? "delegate " : type.IsValueType ? "struct " : "class ") + type.Name);
-        postBuildStep(rep, typeof(TArgs), false);
+        postBuildStep(rep, typeof(TArgs), applicationTrType, false);
     }
 
-    private static void postBuildStep(IPostBuildReporter rep, Type cmdType, bool classDocRecommended)
+    private static void postBuildStep(IPostBuildReporter rep, Type commandLineType, Type applicationTrType, bool classDocRecommended)
     {
-        if (!cmdType.IsClass)
-            rep.Error(@"{0} is not a class.".Fmt(cmdType.FullName), (cmdType.IsEnum ? "enum " : cmdType.IsInterface ? "interface " : typeof(Delegate).IsAssignableFrom(cmdType) ? "delegate " : "struct ") + cmdType.Name);
+        if (!commandLineType.IsClass)
+            rep.Error(@"{0} is not a class.".Fmt(commandLineType.FullName), (commandLineType.IsEnum ? "enum " : commandLineType.IsInterface ? "interface " : typeof(Delegate).IsAssignableFrom(commandLineType) ? "delegate " : "struct ") + commandLineType.Name);
 
         object instance;
-        var type = cmdType;
         try
         {
-            if (type.IsAbstract)
-                type = type.Assembly.GetTypes().FirstOrDefault(t => t.IsClass && !t.IsAbstract && cmdType.IsAssignableFrom(t) && t.GetConstructor(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static, null, Type.EmptyTypes, null) != null);
-            if (type == null)
-            {
-                rep.Error(@"The class {0} does not have a derived non-abstract class type with a default constructor.".Fmt(cmdType.FullName), "class " + cmdType.Name);
-                return;
-            }
-            instance = Activator.CreateInstance(type, true);
+            instance = Activator.CreateInstance(commandLineType, true);
         }
         catch (Exception e)
         {
-            rep.Error(@"{0} could not be instantiated ({1}). Does it have a default constructor?".Fmt(type.FullName, e.Message), "class " + type.Name);
+            rep.Error(@"{0} could not be instantiated ({1}). Does it have a default constructor?".Fmt(commandLineType.FullName, e.Message), "class " + commandLineType.Name);
             return;
+        }
+
+        if (applicationTrType != null)
+        {
+            Type[] typeParam;
+            if (commandLineType.TryGetInterfaceGenericParameters(typeof(ICommandLineValidatable<>), out typeParam) && typeParam[0] != applicationTrType)
+                rep.Error(@"The type {0} implements {1}, but the ApplicationTr type is {2}. If ApplicationTr is right, the interface implemented should be {3}.".Fmt(
+                    commandLineType.FullName,
+                    typeof(ICommandLineValidatable<>).MakeGenericType(typeParam[0]).FullName,
+                    applicationTrType.FullName,
+                    typeof(ICommandLineValidatable<>).MakeGenericType(applicationTrType).FullName
+                ), "class " + commandLineType.Name);
         }
 
         var optionTaken = new Dictionary<string, MemberInfo>();
@@ -577,51 +858,51 @@ public static class CommandLineParser
         FieldInfo lastField = null;
         bool haveSeenOptionalPositional = false;
 
-        checkDocumentation(rep, cmdType, cmdType, sensibleDocMethods, classDocRecommended);
+        checkDocumentation(rep, commandLineType, commandLineType, applicationTrType, sensibleDocMethods, classDocRecommended);
 
-        foreach (var field in getEligibleFields(cmdType))
+        foreach (var field in commandLineType.GetFields())
         {
             if (field.IsDefined<IgnoreAttribute>())
                 continue;
+
+            if (lastField != null)
+                rep.Error(@"The type of {0}.{1} necessitates that it is the last one in the class.".Fmt(lastField.DeclaringType.FullName, lastField.Name), "class " + commandLineType.Name, field.Name);
 
             // Every field must have one of the following
             var positional = field.IsDefined<IsPositionalAttribute>();
             var options = field.GetOrderedOptionAttributeNames();
             var enumOpt = field.GetCustomAttributes<EnumOptionsAttribute>().FirstOrDefault();
 
-            if (positional && lastField != null)
-                rep.Error(@"The type of {0}.{1} necessitates that no positional fields can follow it in the same class.".Fmt(lastField.DeclaringType.FullName, lastField.Name), "class " + cmdType.Name, field.Name);
-
             if (!positional && options == null && enumOpt == null)
             {
-                rep.Error(@"{0}.{1}: Every field must have one of the following attributes: [IsPositional], [Option], [EnumOptions] (fields of an enum type only), or [Ignore].".Fmt(field.DeclaringType.FullName, field.Name), "class " + cmdType.Name, field.Name);
+                rep.Error(@"{0}.{1}: Every field must have one of the following attributes: [IsPositional], [Option], [EnumOptions] (fields of an enum type only), or [Ignore].".Fmt(field.DeclaringType.FullName, field.Name), "class " + commandLineType.Name, field.Name);
                 continue;
             }
 
             // EnumOptionsAttribute can only be used on enum fields
             if (enumOpt != null && !field.FieldType.IsEnum)
-                rep.Error(@"{0}.{1}: Cannot use [EnumOptions] attribute on a field whose type is not an enum type.".Fmt(field.DeclaringType.FullName, field.Name), "class " + cmdType.Name, field.Name);
+                rep.Error(@"{0}.{1}: Cannot use [EnumOptions] attribute on a field whose type is not an enum type.".Fmt(field.DeclaringType.FullName, field.Name), "class " + commandLineType.Name, field.Name);
             // Can’t combine IsPositional and Option
             else if (positional && options != null)
-                rep.Error(@"{0}.{1}: Cannot use [IsPositional] and [Option] attributes on the same field.".Fmt(field.DeclaringType.FullName, field.Name), "class " + cmdType.Name, field.Name);
+                rep.Error(@"{0}.{1}: Cannot use [IsPositional] and [Option] attributes on the same field.".Fmt(field.DeclaringType.FullName, field.Name), "class " + commandLineType.Name, field.Name);
             // Can’t combine IsPositional and EnumOptions
             else if (positional && enumOpt != null)
-                rep.Error(@"{0}.{1}: Cannot use [IsPositional] and [EnumOptions] attributes on the same field. For a positional enum value, use only [IsPositional].".Fmt(field.DeclaringType.FullName, field.Name), "class " + cmdType.Name, field.Name);
+                rep.Error(@"{0}.{1}: Cannot use [IsPositional] and [EnumOptions] attributes on the same field. For a positional enum value, use only [IsPositional].".Fmt(field.DeclaringType.FullName, field.Name), "class " + commandLineType.Name, field.Name);
             // Can’t have [Option] without an option name
             else if (options != null && options.Length == 0)
-                rep.Error(@"{0}.{1}: An [Option] attribute must specify at least one option name.".Fmt(field.DeclaringType.FullName, field.Name), "class " + cmdType.Name, field.Name);
+                rep.Error(@"{0}.{1}: An [Option] attribute must specify at least one option name.".Fmt(field.DeclaringType.FullName, field.Name), "class " + commandLineType.Name, field.Name);
 
             // Option names must start with a dash
             if (options != null && options.Any(o => !o.StartsWith('-')))
-                rep.Error(@"{0}.{1}: All names in an [Option] attribute must start with at least one dash ('-'). Offending option name: ""{2}""".Fmt(field.DeclaringType.FullName, field.Name, options.First(o => !o.StartsWith('-'))), "class " + cmdType.Name, field.Name);
+                rep.Error(@"{0}.{1}: All names in an [Option] attribute must start with at least one dash ('-'). Offending option name: ""{2}""".Fmt(field.DeclaringType.FullName, field.Name, options.First(o => !o.StartsWith('-'))), "class " + commandLineType.Name, field.Name);
 
             var mandatory = field.IsDefined<IsMandatoryAttribute>();
 
             if (mandatory && field.IsDefined<UndocumentedAttribute>())
-                rep.Error(@"{0}.{1}: Fields cannot simultaneously be mandatory and also undocumented.".Fmt(field.DeclaringType.FullName, field.Name), "class " + cmdType.Name, field.Name);
+                rep.Error(@"{0}.{1}: Fields cannot simultaneously be mandatory and also undocumented.".Fmt(field.DeclaringType.FullName, field.Name), "class " + commandLineType.Name, field.Name);
 
             if (positional && mandatory && haveSeenOptionalPositional)
-                rep.Error(@"{0}.{1}: Positional fields can only be marked mandatory if all preceding positional fields are also marked mandatory.".Fmt(field.DeclaringType.FullName, field.Name), "class " + cmdType.Name, field.Name);
+                rep.Error(@"{0}.{1}: Positional fields can only be marked mandatory if all preceding positional fields are also marked mandatory.".Fmt(field.DeclaringType.FullName, field.Name), "class " + commandLineType.Name, field.Name);
             else if (positional && !mandatory)
                 haveSeenOptionalPositional = true;
 
@@ -630,9 +911,9 @@ public static class CommandLineParser
             {
                 // Can’t have a mandatory or a positional multi-value enum
                 if (mandatory && enumOpt != null && enumOpt.Behavior == EnumBehavior.MultipleValues)
-                    rep.Error(@"{0}.{1}: A mandatory enum field cannot use multi-value behavior.".Fmt(field.DeclaringType.FullName, field.Name), "class " + cmdType.Name, field.Name);
+                    rep.Error(@"{0}.{1}: A mandatory enum field cannot use multi-value behavior.".Fmt(field.DeclaringType.FullName, field.Name), "class " + commandLineType.Name, field.Name);
                 if (positional && enumOpt != null && enumOpt.Behavior == EnumBehavior.MultipleValues)
-                    rep.Error(@"{0}.{1}: A positional enum field cannot use multi-value behavior.".Fmt(field.DeclaringType.FullName, field.Name), "class " + cmdType.Name, field.Name);
+                    rep.Error(@"{0}.{1}: A positional enum field cannot use multi-value behavior.".Fmt(field.DeclaringType.FullName, field.Name), "class " + commandLineType.Name, field.Name);
 
                 var commandsTaken = new Dictionary<string, FieldInfo>();
                 var defaultValue = field.GetValue(instance);
@@ -646,41 +927,41 @@ public static class CommandLineParser
                         continue;
 
                     // check that the enum values all have documentation
-                    checkDocumentation(rep, enumField, cmdType, sensibleDocMethods, true);
+                    checkDocumentation(rep, enumField, commandLineType, applicationTrType, sensibleDocMethods, true);
 
                     if (options != null || positional)
                     {
                         // check that the enum values all have at least one CommandName, and they do not clash
                         var cmdNames = enumField.GetCustomAttributes<CommandNameAttribute>().FirstOrDefault();
                         if (cmdNames == null || cmdNames.Names.Length == 0)
-                            rep.Error(@"{0}.{1} (used by {2}.{3}): Enum value must have a [CommandName] attribute (unless it is the field's default value and the field is optional).".Fmt(field.FieldType.FullName, enumField.Name, cmdType.FullName, field.Name), "enum " + field.FieldType.Name, enumField.Name);
+                            rep.Error(@"{0}.{1} (used by {2}.{3}): Enum value must have a [CommandName] attribute (unless it is the field's default value and the field is optional).".Fmt(field.FieldType.FullName, enumField.Name, commandLineType.FullName, field.Name), "enum " + field.FieldType.Name, enumField.Name);
                         else
-                            checkCommandNamesUnique(rep, cmdNames.Names, commandsTaken, cmdType, field, enumField);
+                            checkCommandNamesUnique(rep, cmdNames.Names, commandsTaken, commandLineType, field, enumField);
                     }
                     else
                     {
                         // check that the non-default enum values’ Options are present and do not clash
                         var optionNames = enumField.GetOrderedOptionAttributeNames();
                         if (optionNames == null || !optionNames.Any())
-                            rep.Error(@"{0}.{1} (used by {2}.{3}): Enum value must have an [Option] attribute with at least one option name (unless it is the field's default value and the field is optional).".Fmt(field.FieldType.FullName, enumField.Name, cmdType.FullName, field.Name), "enum " + field.FieldType.Name, enumField.Name);
+                            rep.Error(@"{0}.{1} (used by {2}.{3}): Enum value must have an [Option] attribute with at least one option name (unless it is the field's default value and the field is optional).".Fmt(field.FieldType.FullName, enumField.Name, commandLineType.FullName, field.Name), "enum " + field.FieldType.Name, enumField.Name);
                         else
-                            checkOptionsUnique(rep, optionNames, optionTaken, cmdType, field, enumField);
+                            checkOptionsUnique(rep, optionNames, optionTaken, commandLineType, field, enumField);
                     }
                 }
 
                 // If the enum field has an Option attribute, it needs documentation too
                 if (options != null)
-                    checkDocumentation(rep, field, cmdType, sensibleDocMethods, true);
+                    checkDocumentation(rep, field, commandLineType, applicationTrType, sensibleDocMethods, true);
             }
             // ### BOOL fields
             else if (field.FieldType == typeof(bool))
             {
                 if (positional || mandatory)
-                    rep.Error(@"{0}.{1}: Fields of type bool cannot be positional or mandatory.".Fmt(cmdType.FullName, field.Name), "class " + cmdType.Name, field.Name);
+                    rep.Error(@"{0}.{1}: Fields of type bool cannot be positional or mandatory.".Fmt(commandLineType.FullName, field.Name), "class " + commandLineType.Name, field.Name);
                 else
                     // Here we have checked that the field is not positional, not an enum, and not [Ignore]’d, so it must have an [Option] attribute
-                    checkOptionsUnique(rep, options, optionTaken, cmdType, field);
-                checkDocumentation(rep, field, cmdType, sensibleDocMethods, true);
+                    checkOptionsUnique(rep, options, optionTaken, commandLineType, field);
+                checkDocumentation(rep, field, commandLineType, applicationTrType, sensibleDocMethods, true);
             }
             // ### STRING, STRING[], INTEGER and FLOATING fields (including nullable)
             else if (field.FieldType == typeof(string) || field.FieldType == typeof(string[]) ||
@@ -690,29 +971,45 @@ public static class CommandLineParser
             {
                 // options is null if and only if this field is positional
                 if (options != null)
-                    checkOptionsUnique(rep, options, optionTaken, cmdType, field);
-                checkDocumentation(rep, field, cmdType, sensibleDocMethods, true);
+                    checkOptionsUnique(rep, options, optionTaken, commandLineType, field);
+                checkDocumentation(rep, field, commandLineType, applicationTrType, sensibleDocMethods, true);
+            }
+            // ### Command-group classes
+            else if (field.FieldType.IsClass && field.FieldType.IsDefined<CommandGroupAttribute>())
+            {
+                // Command-group class fields must be positional parameters
+                if (!positional)
+                    rep.Error(@"{0}.{1}: CommandGroup fields must be declared [IsPositional].".Fmt(commandLineType.FullName, field.Name), "class " + commandLineType.Name, field.Name);
 
-                // A positional string[] can only be the last field
-                if (positional && field.FieldType == typeof(string[]))
-                    lastField = field;
+                // The class must have at least two subclasses with a [CommandName] attribute
+                var subclasses = field.FieldType.Assembly.GetTypes().Where(t => !t.IsAbstract && t.IsSubclassOf(field.FieldType));
+                if (subclasses.Count() < 1)
+                    rep.Error(@"{0}.{1}: The CommandGroup class type must have at least one non-abstract derived class with the [CommandName] attribute.".Fmt(commandLineType.FullName, field.Name), "class " + field.FieldType.Name);
+
+                var commandsTaken = new Dictionary<string, Type>();
+
+                foreach (var subclass in subclasses)
+                {
+                    if (!subclass.IsDefined<CommandNameAttribute>())
+                        rep.Error(@"{0}: This subclass of {1} must have a [CommandName] attribute or be marked abstract.".Fmt(subclass.FullName, field.FieldType.FullName), "class " + subclass.Name);
+                    else
+                        checkCommandNamesUnique(rep, subclass.GetCustomAttributes<CommandNameAttribute>().First().Names, commandsTaken, subclass);
+
+                    // Recursively check this class
+                    postBuildStep(rep, subclass, applicationTrType, true);
+                }
+
+                lastField = field;
             }
             else
-                rep.Error(@"{0}.{1} is not of a supported type. Currently accepted types are: enum types, bool, string, string[], numeric types (byte, sbyte, short, ushort, int, uint, long, ulong, float and double) and nullable numeric types.".Fmt(cmdType.FullName, field.Name), "class " + cmdType.Name, field.Name);
+                rep.Error(@"{0}.{1} is not of a supported type. Currently accepted types are: enum types, bool, string, string[], numeric types (byte, sbyte, short, ushort, int, uint, long, ulong, float and double), nullable numeric types, and classes with the [CommandGroup] attribute.".Fmt(commandLineType.FullName, field.Name), "class " + commandLineType.Name, field.Name);
         }
 
-        // Check for derived classes
-        var subcommandsTaken = new Dictionary<string, Type>();
-        var anyDerived = false;
-        foreach (var derivedType in getDirectSubcommands(cmdType))
-        {
-            anyDerived = true;
-            checkCommandNamesUnique(rep, derivedType.GetCustomAttributes<CommandNameAttribute>().First().Names, subcommandsTaken, derivedType);
-            postBuildStep(rep, derivedType, true);
-        }
-
-        if (anyDerived && lastField != null)
-            rep.Error(@"The type of {0}.{1} precludes the use of subcommands.".Fmt(lastField.DeclaringType.FullName, lastField.Name), "class " + cmdType.Name, lastField.Name);
+        if (applicationTrType != null)
+            // Warn if the class has unused documentation methods
+            foreach (var meth in commandLineType.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).Where(m => m.Name.EndsWith("Doc") && m.ReturnType == typeof(string) && m.GetParameters().Select(p => p.ParameterType).SequenceEqual(new Type[] { applicationTrType })))
+                if (!sensibleDocMethods.Contains(meth))
+                    rep.Error(@"{0}.{1} looks like a documentation method, but has no corresponding field, or the corresponding field does not require documentation because it is a positional enum or has an [EnumOptions] attribute.".Fmt(commandLineType.FullName, meth.Name), "class " + commandLineType.Name, meth.Name);
     }
 
     private static void checkOptionsUnique(IPostBuildReporter rep, IEnumerable<string> options, Dictionary<string, MemberInfo> optionTaken, Type type, FieldInfo field, FieldInfo enumField)
@@ -769,7 +1066,18 @@ public static class CommandLineParser
         }
     }
 
-    private static void checkDocumentation(IPostBuildReporter rep, MemberInfo member, Type inType, List<MethodInfo> sensibleDocMethods, bool classDocRecommended)
+    private static Dictionary<Type, object> _applicationTrCacheField = null;
+    private static Dictionary<Type, object> _applicationTrCache
+    {
+        get
+        {
+            if (_applicationTrCacheField == null)
+                _applicationTrCacheField = new Dictionary<Type, object>();
+            return _applicationTrCacheField;
+        }
+    }
+
+    private static void checkDocumentation(IPostBuildReporter rep, MemberInfo member, Type inType, Type applicationTrType, List<MethodInfo> sensibleDocMethods, bool classDocRecommended)
     {
         if (member.IsDefined<UndocumentedAttribute>())
             return;
@@ -794,15 +1102,32 @@ public static class CommandLineParser
                 return;
             }
         }
+        else if (applicationTrType != null)
+        {
+            var meth = inType.GetMethod(member.Name + "Doc", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, new Type[] { applicationTrType }, null);
+            if (meth != null && meth.ReturnType == typeof(string))
+            {
+                sensibleDocMethods.Add(meth);
+                if (!_applicationTrCache.ContainsKey(applicationTrType))
+                    _applicationTrCache[applicationTrType] = Activator.CreateInstance(applicationTrType);
+                var appTr = _applicationTrCache[applicationTrType];
+                toCheck = (string) meth.Invoke(null, new object[] { appTr });
+                if (toCheck == null)
+                {
+                    rep.Error(@"{0}." + member.Name + @"Doc() returned null.".Fmt(inType.FullName), "class " + inType.Name, member.Name + "Doc");
+                    return;
+                }
+            }
+        }
 
         if (classDocRecommended && toCheck == null)
         {
             if (member is Type)
             {
                 rep.Warning((@"{0} does not have any documentation. " +
-                    (null == null ? "U" : @"To provide localised documentation, declare a method ""static string {1}Doc({2})"" on {3}. Otherwise, u") +
+                    (applicationTrType == null ? "U" : @"To provide localised documentation, declare a method ""static string {1}Doc({2})"" on {3}. Otherwise, u") +
                     @"se the [DocumentationLiteral] attribute to specify unlocalisable documentation. " +
-                    @"Use [Undocumented] to completely hide an option or command from the help screen.").Fmt(((Type) member).FullName, member.Name, null != null ? null : null, inType.FullName),
+                    @"Use [Undocumented] to completely hide an option or command from the help screen.").Fmt(((Type) member).FullName, member.Name, applicationTrType != null ? applicationTrType.FullName : null, inType.FullName),
                     ((Type) member).Namespace,
                     "CommandName",
                     "class " + member.Name);
@@ -810,9 +1135,9 @@ public static class CommandLineParser
             else
             {
                 rep.Warning((@"{0}.{1} does not have any documentation. " +
-                    (null == null ? "U" : @"To provide localised documentation, declare a method ""static string {1}Doc({2})"" on {3}. Otherwise, u") +
+                    (applicationTrType == null ? "U" : @"To provide localised documentation, declare a method ""static string {1}Doc({2})"" on {3}. Otherwise, u") +
                     @"se the [DocumentationLiteral] attribute to specify unlocalisable documentation. " +
-                    @"Use [Undocumented] to completely hide an option or command from the help screen.").Fmt(member.DeclaringType.FullName, member.Name, null != null ? null : null, inType.FullName),
+                    @"Use [Undocumented] to completely hide an option or command from the help screen.").Fmt(member.DeclaringType.FullName, member.Name, applicationTrType != null ? applicationTrType.FullName : null, inType.FullName),
                     member.DeclaringType.Namespace,
                     (member.DeclaringType.IsEnum ? "enum " : member.DeclaringType.IsValueType ? "struct " : "class ") + member.DeclaringType.Name,
                     member.Name);
@@ -950,494 +1275,6 @@ public static class CommandLineParser
     }
 }
 
-internal class CommandInfo
-{
-    public Type Type;
-    public CmdLineElement[] Elements;
-}
-
-internal sealed class SubcommandInfo : CommandInfo
-{
-    public string[] Names;
-}
-
-internal abstract class CmdLineElement : IComparable<CmdLineElement>
-{
-    public bool IsMandatory;
-    public virtual bool IsPositional { get { return false; } }
-    public abstract bool ProcessParameter(string[] args, ref int i, List<Action<object>> actionsToPerform, bool suppressOptions, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor, CommandInfo cmd);
-    public abstract void ProcessEndOfParameters(List<Action<object>> actionsToPerform, CommandInfo cmd);
-    public abstract ConsoleColoredString UsageString { get; }
-    public abstract bool AddHelpRow(TextTable table, ref int row, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor);
-
-    public int CompareTo(CmdLineElement other)
-    {
-        // Options must be listed before positionals because if a positional is a subcommand, all the options must be before it.
-        if (IsPositional && !other.IsPositional)
-            return 1;
-        if (!IsPositional && other.IsPositional)
-            return -1;
-
-        // Optional positionals must come after mandatory positionals because that is the order they must be specified in.
-        // If any mandatory positional is a subcommand, then you can’t have any optional positionals anyway.
-        if (IsMandatory && !other.IsMandatory)
-            return -1;
-        if (!IsMandatory && other.IsMandatory)
-            return 1;
-
-        return 0;
-    }
-
-    protected ConsoleColoredString FormatField(string name)
-    {
-        return "<".Color(CmdLineColor.FieldBrackets) + name.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets);
-    }
-
-    protected static bool tryConvertString(string value, List<Action<object>> listToAddActionTo, FieldInfo field)
-    {
-        object result;
-
-        if (field.FieldType == typeof(string))
-            result = value;
-        else
-        {
-            Type type = field.FieldType.IsGenericType && field.FieldType.GetGenericTypeDefinition() == typeof(Nullable<>)
-                ? field.FieldType.GetGenericArguments()[0]
-                : field.FieldType;
-            if (!ExactConvert.Try(type, value, out result))
-                return false;
-        }
-        listToAddActionTo.Add(obj => { field.SetValue(obj, result); });
-        return true;
-    }
-}
-
-internal abstract class CmdLineFieldPositional : CmdLineElement
-{
-    public override bool IsPositional { get { return true; } }
-
-    public FieldInfo Field;
-    public override void ProcessEndOfParameters(List<Action<object>> actionsToPerform, CommandInfo cmd)
-    {
-        if (IsMandatory)
-            throw new MissingParameterException(Field, null, false, cmd);
-    }
-    public override ConsoleColoredString UsageString
-    {
-        get
-        {
-            return (IsMandatory ? "{0}" : "[{0}]").Color(CmdLineColor.OptionalityDelimiters).Fmt(
-                "<".Color(CmdLineColor.FieldBrackets) + Field.Name.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets));
-        }
-    }
-    public override bool AddHelpRow(TextTable table, ref int row, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
-    {
-        table.SetCell(0, row, FormatField(Field.Name), noWrap: true, colSpan: 2);
-        table.SetCell(2, row, Field.GetDocumentation(Field.DeclaringType, helpProcessor), colSpan: 4);
-        row++;
-        return false;
-    }
-}
-
-internal sealed class CmdLineEnumFieldPositional : CmdLineFieldPositional
-{
-    public override bool ProcessParameter(string[] args, ref int i, List<Action<object>> actionsToPerform, bool suppressOptions, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor, CommandInfo cmd)
-    {
-        var name = args[i];
-        if (name.StartsWith('-') && !suppressOptions)
-            return false;
-        foreach (var enumField in Field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public))
-        {
-            if (enumField.GetCustomAttributes<CommandNameAttribute>().First().Names.Any(c => c.Equals(name, StringComparison.OrdinalIgnoreCase)))
-            {
-                actionsToPerform.Add(obj => { Field.SetValue(obj, enumField.GetValue(null)); });
-                i++;
-                return true;
-            }
-        }
-        throw new UnrecognizedCommandOrOptionException(args[i], cmd);
-    }
-
-    public override bool AddHelpRow(TextTable table, ref int row, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
-    {
-        var topRow = row;
-        var doc = Field.GetDocumentation(Field.DeclaringType, helpProcessor);
-        if (doc.Length > 0 || Field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public).All(el => el.IsDefined<UndocumentedAttribute>() || !el.GetCustomAttributes<CommandNameAttribute>().Any()))
-        {
-            table.SetCell(2, row, doc, colSpan: 4);
-            row++;
-        }
-        foreach (var el in Field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public))
-        {
-            if (el.IsDefined<UndocumentedAttribute>())
-                continue;
-            var attr = el.GetCustomAttributes<CommandNameAttribute>().FirstOrDefault();
-            if (attr == null)   // skip the default value
-                continue;
-            table.SetCell(2, row, attr.Names.Where(n => n.Length <= 2).Select(s => s.Color(CmdLineColor.EnumValue)).JoinColoredString(", "), noWrap: true);
-            table.SetCell(3, row, attr.Names.Where(n => n.Length > 2).Select(s => s.Color(CmdLineColor.EnumValue)).JoinColoredString(Environment.NewLine), noWrap: true);
-            table.SetCell(4, row, el.GetDocumentation(Field.DeclaringType, helpProcessor), colSpan: 2);
-            row++;
-        }
-        table.SetCell(0, topRow, FormatField(Field.Name), noWrap: true, colSpan: 2, rowSpan: row - topRow);
-        return false;
-    }
-}
-
-internal abstract class CmdLineOption : CmdLineElement
-{
-    public string[] Options;
-}
-
-internal abstract class CmdLineFieldOption : CmdLineOption
-{
-    public FieldInfo Field;
-
-    public override void ProcessEndOfParameters(List<Action<object>> actionsToPerform, CommandInfo cmd)
-    {
-        if (IsMandatory)
-            throw new MissingParameterException(Field, null, true, cmd);
-    }
-
-    public override bool AddHelpRow(TextTable table, ref int row, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
-    {
-        table.SetCell(0, row, Field.GetOrderedOptionAttributeNames().Where(o => !o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(", "), noWrap: true);
-        table.SetCell(1, row, Field.GetOrderedOptionAttributeNames().Where(o => o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(Environment.NewLine), noWrap: true);
-        table.SetCell(2, row, Field.GetDocumentation(Field.DeclaringType, helpProcessor), colSpan: 4);
-        row++;
-        return false;
-    }
-}
-
-internal abstract class CmdLineEnumOption : CmdLineFieldOption
-{
-    public EnumBehavior Behavior;
-    public string AlreadyProcessedOptionOrCommand = null;
-    public object AlreadyProcessedValue = null;
-
-    protected abstract object getValue(string[] args, ref int i, out string optionOrCommand, CommandInfo cmd);
-
-    public override bool ProcessParameter(string[] args, ref int i, List<Action<object>> actionsToPerform, bool suppressOptions, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor, CommandInfo cmd)
-    {
-        if (suppressOptions || !Options.Contains(args[i]))
-            return false;
-        string optionOrCommand;
-        var value = getValue(args, ref i, out optionOrCommand, cmd);
-        if (value == null)
-            return false;
-        if (Behavior == EnumBehavior.SingleValue)
-        {
-            if (AlreadyProcessedOptionOrCommand == null)
-            {
-                AlreadyProcessedOptionOrCommand = optionOrCommand;
-                AlreadyProcessedValue = value;
-                actionsToPerform.Add(obj => { Field.SetValue(obj, value); });
-            }
-            else if (AlreadyProcessedValue.Equals(value))
-            {
-                // Don’t throw an error if the same value is simply specified multiple times. Just ignore the second occurrence
-            }
-            else
-            {
-                // Since only a single value is allowed, throw an error if another value is specified later
-                throw new IncompatibleCommandOrOptionException(AlreadyProcessedOptionOrCommand, optionOrCommand, cmd);
-            }
-        }
-        else
-        {
-            if (AlreadyProcessedValue == null)
-                AlreadyProcessedValue = value;
-            else
-                // Bitwise OR
-                value = AlreadyProcessedValue = (dynamic) AlreadyProcessedValue | (dynamic) value;
-
-            actionsToPerform.Add(obj => { Field.SetValue(obj, value); });
-        }
-        return true;
-    }
-}
-
-internal sealed class CmdLineEnumOptionWithNames : CmdLineEnumOption
-{
-    public Dictionary<string, object> NameToValue;
-
-    protected override object getValue(string[] args, ref int i, out string optionOrCommand, CommandInfo cmd)
-    {
-        i++;
-        if (i >= args.Length)
-            throw new IncompleteOptionException(args[i - 1], cmd);
-        optionOrCommand = args[i];
-        object value;
-        if (!NameToValue.TryGetValue(optionOrCommand, out value))
-            throw new UnrecognizedCommandOrOptionException(optionOrCommand, cmd);
-        i++;
-        return value;
-    }
-
-    public override ConsoleColoredString UsageString
-    {
-        get
-        {
-            if (Behavior == EnumBehavior.MultipleValues)
-            {
-                // -t name [-t name [...]]    — multi-value enums with CommandNames
-                return (IsMandatory ? "{0} {1} [{0} {1} [...]]" : "[{0} {1} [{0} {1} [...]]]").Color(CmdLineColor.OptionalityDelimiters).Fmt(
-                    Options[0].Color(CmdLineColor.Option),
-                    "<".Color(CmdLineColor.FieldBrackets) + Field.Name.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets));
-            }
-            else
-            {
-                // -t name
-                return (IsMandatory ? "{0} {1}" : "[{0} {1}]").Color(CmdLineColor.OptionalityDelimiters).Fmt(
-                    Options[0].Color(CmdLineColor.Option),
-                    "<".Color(CmdLineColor.FieldBrackets) + Field.Name.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets));
-            }
-        }
-    }
-
-    public override bool AddHelpRow(TextTable table, ref int row, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
-    {
-        var topRow = row;
-        row++;
-        foreach (var el in Field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public).Where(e => !e.IsDefined<UndocumentedAttribute>()))
-        {
-            var attr = el.GetCustomAttributes<CommandNameAttribute>().FirstOrDefault();
-            if (attr == null)   // skip the default value
-                continue;
-            table.SetCell(3, row, attr.Names.Where(n => n.Length <= 2).Select(s => s.Color(CmdLineColor.EnumValue)).JoinColoredString(", "), noWrap: true);
-            table.SetCell(4, row, attr.Names.Where(n => n.Length > 2).Select(s => s.Color(CmdLineColor.EnumValue)).JoinColoredString(Environment.NewLine), noWrap: true);
-            table.SetCell(5, row, el.GetDocumentation(Field.DeclaringType, helpProcessor));
-            row++;
-        }
-        if (row == topRow + 1)
-            throw new InvalidOperationException("Enum type {2}.{3} has no values (apart from default value for field {0}.{1}).".Fmt(Field.DeclaringType.FullName, Field.Name, Field.FieldType.DeclaringType.FullName, Field.FieldType));
-        table.SetCell(0, topRow, Field.GetOrderedOptionAttributeNames().Where(o => !o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(", "), noWrap: true, rowSpan: row - topRow);
-        table.SetCell(1, topRow, Field.GetOrderedOptionAttributeNames().Where(o => o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(Environment.NewLine), noWrap: true, rowSpan: row - topRow);
-        table.SetCell(2, topRow, Field.GetDocumentation(Field.DeclaringType, helpProcessor), colSpan: 4);
-        table.SetCell(2, topRow + 1, FormatField(Field.Name), noWrap: true, rowSpan: row - topRow - 1);
-        return false;
-    }
-}
-
-internal sealed class CmdLineEnumOptions : CmdLineEnumOption
-{
-    public Dictionary<string, object> OptionToValue;
-
-    protected override object getValue(string[] args, ref int i, out string optionOrCommand, CommandInfo cmd)
-    {
-        optionOrCommand = args[i];
-        i++;
-        return OptionToValue[optionOrCommand];
-    }
-
-    public override ConsoleColoredString UsageString
-    {
-        get
-        {
-            var options = Field.FieldType.GetFields(BindingFlags.Public | BindingFlags.Static)
-                .Where(fld => fld.IsDefined<OptionAttribute>() && !fld.IsDefined<UndocumentedAttribute>())
-                .Select(fi => fi.GetOrderedOptionAttributeNames().First().Color(CmdLineColor.Option))
-                .ToArray();
-
-            if (Behavior == EnumBehavior.MultipleValues)
-                // [-t] [-u] [-v]    — multi-value enums with Option names
-                return options.Select(opt => "[{0}]".Color(CmdLineColor.OptionalityDelimiters).Fmt(opt)).JoinColoredString(" ");
-
-            // {-t|-u}      — single-value enums with Options
-            return (IsMandatory ? (options.Length > 1 ? "{{{0}{1}" : "{0}") : "[{0}]").Color(CmdLineColor.OptionalityDelimiters).Fmt(options.JoinColoredString("|".Color(CmdLineColor.OptionalityDelimiters)), "}");
-        }
-    }
-
-    public override bool AddHelpRow(TextTable table, ref int row, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
-    {
-        foreach (var el in Field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public).Where(e => e.IsDefined<OptionAttribute>() && !e.IsDefined<UndocumentedAttribute>()))
-        {
-            table.SetCell(0, row, el.GetOrderedOptionAttributeNames().Where(o => !o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(", "), noWrap: true);
-            table.SetCell(1, row, el.GetOrderedOptionAttributeNames().Where(o => o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(Environment.NewLine), noWrap: true);
-            table.SetCell(2, row, el.GetDocumentation(Field.DeclaringType, helpProcessor), colSpan: 4);
-            row++;
-        }
-        return false;
-    }
-}
-
-internal sealed class CmdLineBoolOption : CmdLineFieldOption
-{
-    public override bool ProcessParameter(string[] args, ref int i, List<Action<object>> actionsToPerform, bool suppressOptions, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor, CommandInfo cmd)
-    {
-        if (suppressOptions || !Options.Contains(args[i]))
-            return false;
-        actionsToPerform.Add(obj => { Field.SetValue(obj, true); });
-        i++;
-        return true;
-    }
-
-    public override ConsoleColoredString UsageString
-    {
-        get
-        {
-            // [-t]
-            return "[{0}]".Color(CmdLineColor.OptionalityDelimiters).Fmt(Field.GetOrderedOptionAttributeNames().First().Color(CmdLineColor.Option));
-        }
-    }
-}
-
-// Covers string, integers, float/double, and their nullables
-internal sealed class CmdLineOtherOption : CmdLineFieldOption
-{
-    public override bool ProcessParameter(string[] args, ref int i, List<Action<object>> actionsToPerform, bool suppressOptions, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor, CommandInfo cmd)
-    {
-        var optionName = args[i];
-        if (suppressOptions || !Options.Contains(optionName))
-            return false;
-
-        i++;
-        if (i >= args.Length)
-            throw new IncompleteOptionException(optionName, cmd);
-
-        if (!tryConvertString(args[i], actionsToPerform, Field))
-            throw new InvalidNumericParameterException(Field.Name, cmd);
-
-        i++;
-        return true;
-    }
-
-    public override ConsoleColoredString UsageString
-    {
-        get
-        {
-            // -t name
-            return (IsMandatory ? "{0} {1}" : "[{0} {1}]").Color(CmdLineColor.OptionalityDelimiters).Fmt(
-                Field.GetOrderedOptionAttributeNames().First().Color(CmdLineColor.Option),
-                "<".Color(CmdLineColor.FieldBrackets) + Field.Name.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets));
-        }
-    }
-}
-
-// Covers string, integers, float/double, and their nullables
-internal sealed class CmdLineOtherPositional : CmdLineFieldPositional
-{
-    public override bool ProcessParameter(string[] args, ref int i, List<Action<object>> actionsToPerform, bool suppressOptions, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor, CommandInfo cmd)
-    {
-        if (!tryConvertString(args[i], actionsToPerform, Field))
-            throw new InvalidNumericParameterException(Field.Name, cmd);
-        i++;
-        return true;
-    }
-}
-
-internal sealed class CmdLineStringArrayOption : CmdLineFieldOption
-{
-    private bool Already = false;
-    public override bool ProcessParameter(string[] args, ref int i, List<Action<object>> actionsToPerform, bool suppressOptions, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor, CommandInfo cmd)
-    {
-        var optionName = args[i];
-        if (suppressOptions || !Options.Contains(optionName))
-            return false;
-
-        i++;
-        if (i >= args.Length)
-            throw new IncompleteOptionException(optionName, cmd);
-
-        var value = args[i];
-        if (Already)
-            actionsToPerform.Add(obj => { Field.SetValue(obj, ((string[]) Field.GetValue(obj)).Concat(value).ToArray()); });
-        else
-        {
-            actionsToPerform.Add(obj => { Field.SetValue(obj, new string[] { value }); });
-            Already = true;
-        }
-
-        i++;
-        return true;
-    }
-
-    public override ConsoleColoredString UsageString
-    {
-        get
-        {
-            // -t name [-t name [...]]
-            return (IsMandatory ? "{0} {1} [{0} {1} [...]]" : "[{0} {1} [{0} {1} [...]]]").Color(CmdLineColor.OptionalityDelimiters).Fmt(
-                Field.GetOrderedOptionAttributeNames().First().Color(CmdLineColor.Option),
-                "<".Color(CmdLineColor.FieldBrackets) + Field.Name.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets));
-        }
-    }
-}
-
-internal sealed class CmdLineStringArrayPositional : CmdLineFieldPositional
-{
-    private List<string> Already = null;
-
-    public override bool ProcessParameter(string[] args, ref int i, List<Action<object>> actionsToPerform, bool suppressOptions, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor, CommandInfo cmd)
-    {
-        if (Already == null)
-            Already = new List<string>();
-        Already.Add(args[i]);
-        i++;
-        return true;
-    }
-
-    public override void ProcessEndOfParameters(List<Action<object>> actionsToPerform, CommandInfo cmd)
-    {
-        if (IsMandatory && Already == null)
-            throw new MissingParameterException(Field, null, false, cmd);
-        actionsToPerform.Add(obj => { Field.SetValue(obj, Already == null ? new string[] { } : Already.ToArray()); });
-    }
-}
-
-internal sealed class CmdLineSubcommand : CmdLineElement
-{
-    public override bool IsPositional { get { return true; } }
-
-    public Type Type;
-    public SubcommandInfo[] Subcommands;
-    public SubcommandInfo Subcommand;
-
-    public override bool ProcessParameter(string[] args, ref int i, List<Action<object>> actionsToPerform, bool suppressOptions, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor, CommandInfo cmd)
-    {
-        var name = args[i];
-        Subcommand = Subcommands.FirstOrDefault(s => s.Names.Contains(name));
-        if (Subcommand == null)
-            throw new UnrecognizedCommandOrOptionException(name, cmd);
-        i++;
-        return true;
-    }
-
-    public override void ProcessEndOfParameters(List<Action<object>> actionsToPerform, CommandInfo cmd)
-    {
-        if (IsMandatory)
-            throw new MissingSubcommandException(cmd);
-    }
-
-    public override ConsoleColoredString UsageString
-    {
-        get
-        {
-            return (IsMandatory ? "{0}" : "[{0}]").Color(CmdLineColor.OptionalityDelimiters).Fmt(
-                "<".Color(CmdLineColor.FieldBrackets) + "...".Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets));
-        }
-    }
-
-    public override bool AddHelpRow(TextTable table, ref int row, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
-    {
-        var anyCommandsWithSuboptions = false;
-        int origRow = row;
-        foreach (var subcmd in Subcommands)
-        {
-            var cell1 = ConsoleColoredString.Empty;
-            var cell2 = ConsoleColoredString.Empty;
-            anyCommandsWithSuboptions |= subcmd.Elements.Length > 0;
-            var asterisk = subcmd.Elements.Length > 0 ? "*".Color(CmdLineColor.SubcommandsPresentAsterisk) : ConsoleColoredString.Empty;
-            table.SetCell(2, row, subcmd.Names.Where(n => n.Length <= 2).Select(n => n.Color(CmdLineColor.Command) + asterisk).JoinColoredString(", "), noWrap: true);
-            table.SetCell(3, row, subcmd.Names.Where(n => n.Length > 2).Select(n => n.Color(CmdLineColor.Command) + asterisk).JoinColoredString(Environment.NewLine), noWrap: true);
-            table.SetCell(4, row, subcmd.Type.GetDocumentation(subcmd.Type, helpProcessor), colSpan: 2);
-            row++;
-        }
-        table.SetCell(0, origRow, FormatField("..."), colSpan: 2, rowSpan: row - origRow, noWrap: true);
-        return anyCommandsWithSuboptions;
-    }
-}
-
 internal static class CmdLineColor
 {
     public const ConsoleColor Option = ConsoleColor.Yellow;
@@ -1456,7 +1293,8 @@ internal static class CmdLineColor
 
 /// <summary>
 ///     Contains methods to validate a set of parameters passed by the user on the command-line and parsed by <see
-///     cref="CommandLineParser"/>.</summary>
+///     cref="CommandLineParser"/>. Use this class only in monolingual (unlocalisable) applications. Use <see
+///     cref="ICommandLineValidatable{TTranslation}"/> otherwise.</summary>
 public interface ICommandLineValidatable
 {
     /// <summary>
@@ -1465,11 +1303,40 @@ public interface ICommandLineValidatable
     ConsoleColoredString Validate();
 }
 
+/// <summary>
+///     Contains methods to validate a set of parameters passed by the user on the command-line and parsed by <see
+///     cref="CommandLineParser"/>.</summary>
+/// <typeparam name="TTranslation">
+///     A translation-string class containing the error messages that can occur during validation.</typeparam>
+public interface ICommandLineValidatable<in TTranslation> where TTranslation : TranslationBase
+{
+    /// <summary>
+    ///     When implemented in a class, returns an error message if the contents of the class are invalid, otherwise returns
+    ///     null.</summary>
+    /// <param name="tr">
+    ///     Contains translations for the messages that may occur during validation.</param>
+    ConsoleColoredString Validate(TTranslation tr);
+}
+
+/// <summary>Groups the translatable strings in the <see cref="Translation"/> class into categories.</summary>
+public enum TranslationGroup
+{
+    /// <summary>Error messages produced by the command-line parser.</summary>
+    [LingoGroup("Command-line errors", "Contains messages informing the user of invalid command-line syntax.")]
+    CommandLineError,
+    /// <summary>Messages used by the command-line parser to produce help pages.</summary>
+    [LingoGroup("Command-line help", "Contains messages used to construct help pages for command-line options and parameters.")]
+    CommandLineHelp
+}
+
 /// <summary>Contains translatable strings pertaining to the command-line parser, including error messages and usage help.</summary>
-public sealed class Translation
+public sealed class Translation : TranslationBase
 {
 #pragma warning disable 1591    // Missing XML comment for publicly visible type or member
-    public string
+    public Translation() : base(Language.EnglishUS) { }
+
+    [LingoInGroup(TranslationGroup.CommandLineError)]
+    public TrString
         IncompatibleCommandOrOption = @"The command or option, {0}, cannot be used in conjunction with {1}. Please specify only one of the two.",
         IncompleteOption = @"The {0} option must be followed by an additional parameter.",
         InvalidNumber = @"The {0} option expects a number. The specified parameter does not constitute a valid number.",
@@ -1477,12 +1344,12 @@ public sealed class Translation
         MissingOptionBefore = @"The option {0} is mandatory and must be specified before the {1} parameter.",
         MissingParameter = @"The parameter {0} is mandatory and must be specified.",
         MissingParameterBefore = @"The parameter {0} is mandatory and must be specified before the {1} parameter.",
-        MissingSubcommand = @"The command line options must be followed by a command name.",
         UnexpectedParameter = @"Unexpected parameter: {0}",
         UnrecognizedCommandOrOption = @"The specified command or option, {0}, is not recognized.",
         UserRequestedHelp = @"The user has requested help using one of the help options.";
 
-    public string
+    [LingoInGroup(TranslationGroup.CommandLineHelp)]
+    public TrString
         AdditionalOptions = @"This command accepts further arguments on the command line. Type the command followed by *-?* or *help* to list them.",
         Error = @"Error:",
         OptionsHeader = @"Optional parameters:",
@@ -1492,17 +1359,17 @@ public sealed class Translation
 #pragma warning restore 1591    // Missing XML comment for publicly visible type or member
 }
 
-/// <summary>Use this on a class to specify that it represent a command-line syntax.</summary>
+/// <summary>Use this on an abstract class to specify that its subclasses represent various commands.</summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
-public sealed class CommandLineAttribute : Attribute
+public sealed class CommandGroupAttribute : Attribute
 {
     /// <summary>Constructor.</summary>
-    public CommandLineAttribute() { }
+    public CommandGroupAttribute() { }
 }
 
 /// <summary>
-///     Use this on a derived class or on an enum value to specify the command the user must use to invoke that class or enum
-///     value.</summary>
+///     Use this on a sub-class of an abstract class or on an enum value to specify the command the user must use to invoke
+///     that class or enum value.</summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Field, Inherited = false, AllowMultiple = false), RummageKeepUsersReflectionSafe]
 public sealed class CommandNameAttribute : Attribute
 {
@@ -1670,29 +1537,24 @@ public sealed class IgnoreAttribute : Attribute
     public IgnoreAttribute() { }
 }
 
-#pragma warning disable 1591 // missing XML comment
-[Serializable]
-public abstract class TranslatableException : Exception
-{
-    public static Translation DefaultTranslation { get; set; }
-
-    public TranslatableException(Func<Translation, string> getMessage, Exception inner)
-        : base(getMessage(DefaultTranslation == null ? (DefaultTranslation = new Translation()) : DefaultTranslation), inner)
-    {
-    }
-}
-#pragma warning restore 1591 // missing XML comment
-
 /// <summary>Represents any error encountered while parsing a command line. This class is abstract.</summary>
 [Serializable]
-public abstract class CommandLineParseException : TranslatableException
+public abstract class CommandLineParseException : TranslatableException<Translation>
 {
-    /// <summary>Specifies the command-line type for which a help screen is to be output to the user on the console.</summary>
-    internal CommandInfo CommandInfo { get; private set; }
-
+    /// <summary>
+    ///     Generates the help screen to be output to the user on the console. For non-internationalised (single-language)
+    ///     applications, pass null for the Translation parameter.</summary>
+    internal Func<Translation, int, ConsoleColoredString> GenerateHelpFunc { get; private set; }
     /// <summary>Contains the error message that describes the cause of this exception.</summary>
     public Func<Translation, ConsoleColoredString> GetColoredMessage { get; private set; }
-
+    /// <summary>
+    ///     Generates the help screen to be output to the user on the console.</summary>
+    /// <param name="tr">
+    ///     The translation class containing the translated text, or <c>null</c> for English.</param>
+    /// <param name="wrapWidth">
+    ///     The character width at which the output should be word-wrapped. The default (<c>null</c>) uses <see
+    ///     cref="ConsoleUtil.WrapToWidth"/>.</param>
+    public ConsoleColoredString GenerateHelp(Translation tr, int? wrapWidth = null) { return GenerateHelpFunc(tr, wrapWidth ?? ConsoleUtil.WrapToWidth()); }
     /// <summary>
     ///     Generates a printable description of the error represented by this exception, typically used to tell the user what
     ///     they did wrong.</summary>
@@ -1707,8 +1569,8 @@ public abstract class CommandLineParseException : TranslatableException
             tr = new Translation();
 
         var strings = new List<ConsoleColoredString>();
-        var message = tr.Error.Color(CmdLineColor.Error) + " " + GetColoredMessage(tr);
-        foreach (var line in message.WordWrap(wrapWidth ?? ConsoleUtil.WrapToWidth(), tr.Error.Length + 1))
+        var message = tr.Error.Translation.Color(CmdLineColor.Error) + " " + GetColoredMessage(tr);
+        foreach (var line in message.WordWrap(wrapWidth ?? ConsoleUtil.WrapToWidth(), tr.Error.Translation.Length + 1))
         {
             strings.Add(line);
             strings.Add(Environment.NewLine);
@@ -1717,12 +1579,12 @@ public abstract class CommandLineParseException : TranslatableException
     }
 
     /// <summary>Constructor.</summary>
-    internal CommandLineParseException(Func<Translation, ConsoleColoredString> getMessage, CommandInfo commandInfo) : this(getMessage, commandInfo, null) { }
+    public CommandLineParseException(Func<Translation, ConsoleColoredString> getMessage, Func<Translation, int, ConsoleColoredString> helpGenerator) : this(getMessage, helpGenerator, null) { }
     /// <summary>Constructor.</summary>
-    internal CommandLineParseException(Func<Translation, ConsoleColoredString> getMessage, CommandInfo commandInfo, Exception inner)
+    public CommandLineParseException(Func<Translation, ConsoleColoredString> getMessage, Func<Translation, int, ConsoleColoredString> helpGenerator, Exception inner)
         : base(tr => getMessage(tr).ToString(), inner)
     {
-        CommandInfo = commandInfo;
+        GenerateHelpFunc = helpGenerator;
         GetColoredMessage = getMessage;
     }
 
@@ -1730,42 +1592,18 @@ public abstract class CommandLineParseException : TranslatableException
     ///     Prints usage information, followed by an error message describing to the user what it was that the parser didn't
     ///     understand.</summary>
     /// <param name="tr">
-    ///     Contains translations for the messages used by the command-line parser. Set this to <c>null</c> only if your
-    ///     application is definitely monolingual (unlocalisable).</param>
-    /// <param name="helpProcessor">
-    ///     Specifies a callback which is invoked on every documentation string retrieved from the <see
-    ///     cref="DocumentationAttribute"/>s to generate the help text. This callback can modify the text arbitrarily.</param>
-    public virtual void WriteUsageInfoToConsole(Translation tr = null, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor = null)
-    {
-        ConsoleUtil.Write(GetUsageInfo(tr, helpProcessor));
-    }
-
-    /// <summary>
-    ///     Generates and returns usage information, followed by an error message describing to the user what it was that the
-    ///     parser didn't understand.</summary>
-    /// <param name="tr">
-    ///     Contains translations for the messages used by the command-line parser. Set this to <c>null</c> only if your
-    ///     application is definitely monolingual (unlocalisable).</param>
-    /// <param name="helpProcessor">
-    ///     Specifies a callback which is invoked on every documentation string retrieved from the <see
-    ///     cref="DocumentationAttribute"/>s to generate the help text. This callback can modify the text arbitrarily.</param>
-    public ConsoleColoredString GetUsageInfo(Translation tr = null, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor = null)
+    ///     Contains translations for the messages used by the command-line parser. Set this to null only if your application
+    ///     is definitely monolingual (unlocalisable).</param>
+    public virtual void WriteUsageInfoToConsole(Translation tr = null)
     {
         if (tr == null)
             tr = new Translation();
-        var str = CommandLineParser.GenerateHelp(CommandInfo, ConsoleUtil.WrapToWidth(), tr, helpProcessor);
-        if (WriteErrorText)
-            str += Environment.NewLine + GenerateErrorText(tr, ConsoleUtil.WrapToWidth());
-        return str;
-    }
 
-    /// <summary>
-    ///     Determines whether <see cref="WriteUsageInfoToConsole"/> should call <see cref="GenerateErrorText"/> and output it
-    ///     to the console. Default is <c>true</c>.</summary>
-    /// <remarks>
-    ///     Only set this to <c>false</c> if the user explicitly asked to see the help screen. Otherwise its appearance
-    ///     without explanation is confusing.</remarks>
-    protected internal virtual bool WriteErrorText { get { return true; } }
+        ConsoleUtil.Write(GenerateHelp(tr, ConsoleUtil.WrapToWidth()));
+
+        Console.WriteLine();
+        ConsoleUtil.Write(GenerateErrorText(tr, ConsoleUtil.WrapToWidth()));
+    }
 }
 
 /// <summary>Indicates that the user supplied one of the standard options we recognize as a help request.</summary>
@@ -1773,13 +1611,23 @@ public abstract class CommandLineParseException : TranslatableException
 public sealed class CommandLineHelpRequestedException : CommandLineParseException
 {
     /// <summary>Constructor.</summary>
-    internal CommandLineHelpRequestedException(CommandInfo commandInfo)
-        : base(tr => tr.UserRequestedHelp.Color(ConsoleColor.Gray), commandInfo)
+    public CommandLineHelpRequestedException(Func<Translation, int, ConsoleColoredString> helpGenerator)
+        : base(tr => tr.UserRequestedHelp.Color(ConsoleColor.Gray), helpGenerator)
     {
     }
 
-    /// <summary>Overrides the base to indicate that no error message should be output along with the help screen.</summary>
-    protected internal override bool WriteErrorText { get { return false; } }
+    /// <summary>
+    ///     Prints usage information.</summary>
+    /// <param name="tr">
+    ///     Contains translations for the messages used by the command-line parser. Set this to null only if your application
+    ///     is definitely monolingual (unlocalisable).</param>
+    public override void WriteUsageInfoToConsole(Translation tr = null)
+    {
+        if (tr == null)
+            tr = new Translation();
+
+        ConsoleUtil.Write(GenerateHelp(tr, ConsoleUtil.WrapToWidth()));
+    }
 }
 
 /// <summary>Specifies that the arguments specified by the user on the command-line do not pass the custom validation checks.</summary>
@@ -1787,7 +1635,7 @@ public sealed class CommandLineHelpRequestedException : CommandLineParseExceptio
 public sealed class CommandLineValidationException : CommandLineParseException
 {
     /// <summary>Constructor.</summary>
-    internal CommandLineValidationException(ConsoleColoredString message, CommandInfo commandInfo) : base(tr => message, commandInfo) { }
+    public CommandLineValidationException(ConsoleColoredString message, Func<Translation, int, ConsoleColoredString> helpGenerator) : base(tr => message, helpGenerator) { }
 }
 
 /// <summary>
@@ -1799,10 +1647,10 @@ public sealed class UnrecognizedCommandOrOptionException : CommandLineParseExcep
     /// <summary>The unrecognized command name or option name.</summary>
     public string CommandOrOptionName { get; private set; }
     /// <summary>Constructor.</summary>
-    internal UnrecognizedCommandOrOptionException(string commandOrOptionName, CommandInfo commandInfo) : this(commandOrOptionName, commandInfo, null) { }
+    public UnrecognizedCommandOrOptionException(string commandOrOptionName, Func<Translation, int, ConsoleColoredString> helpGenerator) : this(commandOrOptionName, helpGenerator, null) { }
     /// <summary>Constructor.</summary>
-    internal UnrecognizedCommandOrOptionException(string commandOrOptionName, CommandInfo commandInfo, Exception inner)
-        : base(tr => tr.UnrecognizedCommandOrOption.ToConsoleColoredString().Fmt(commandOrOptionName.Color(ConsoleColor.White)), commandInfo, inner)
+    public UnrecognizedCommandOrOptionException(string commandOrOptionName, Func<Translation, int, ConsoleColoredString> helpGenerator, Exception inner)
+        : base(tr => tr.UnrecognizedCommandOrOption.ToConsoleColoredString().Fmt(commandOrOptionName.Color(ConsoleColor.White)), helpGenerator, inner)
     {
         CommandOrOptionName = commandOrOptionName;
     }
@@ -1821,10 +1669,10 @@ public sealed class IncompatibleCommandOrOptionException : CommandLineParseExcep
     /// <summary>The later option or command, which conflicts with the <see cref="EarlierCommandOrOption"/>.</summary>
     public string LaterCommandOrOption { get; private set; }
     /// <summary>Constructor.</summary>
-    internal IncompatibleCommandOrOptionException(string earlier, string later, CommandInfo commandInfo) : this(earlier, later, commandInfo, null) { }
+    public IncompatibleCommandOrOptionException(string earlier, string later, Func<Translation, int, ConsoleColoredString> helpGenerator) : this(earlier, later, helpGenerator, null) { }
     /// <summary>Constructor.</summary>
-    internal IncompatibleCommandOrOptionException(string earlier, string later, CommandInfo commandInfo, Exception inner)
-        : base(tr => tr.IncompatibleCommandOrOption.ToConsoleColoredString().Fmt(later.Color(ConsoleColor.White), earlier.Color(ConsoleColor.White)), commandInfo, inner)
+    public IncompatibleCommandOrOptionException(string earlier, string later, Func<Translation, int, ConsoleColoredString> helpGenerator, Exception inner)
+        : base(tr => tr.IncompatibleCommandOrOption.ToConsoleColoredString().Fmt(later.Color(ConsoleColor.White), earlier.Color(ConsoleColor.White)), helpGenerator, inner)
     {
         EarlierCommandOrOption = earlier;
         LaterCommandOrOption = later;
@@ -1840,10 +1688,10 @@ public sealed class IncompleteOptionException : CommandLineParseException
     /// <summary>The name of the option that was missing an argument.</summary>
     public string OptionName { get; private set; }
     /// <summary>Constructor.</summary>
-    internal IncompleteOptionException(string optionName, CommandInfo commandInfo) : this(optionName, commandInfo, null) { }
+    public IncompleteOptionException(string optionName, Func<Translation, int, ConsoleColoredString> helpGenerator) : this(optionName, helpGenerator, null) { }
     /// <summary>Constructor.</summary>
-    internal IncompleteOptionException(string optionName, CommandInfo commandInfo, Exception inner)
-        : base(tr => tr.IncompleteOption.ToConsoleColoredString().Fmt(optionName.Color(ConsoleColor.White)), commandInfo, inner)
+    public IncompleteOptionException(string optionName, Func<Translation, int, ConsoleColoredString> helpGenerator, Exception inner)
+        : base(tr => tr.IncompleteOption.ToConsoleColoredString().Fmt(optionName.Color(ConsoleColor.White)), helpGenerator, inner)
     {
         OptionName = optionName;
     }
@@ -1858,10 +1706,10 @@ public sealed class UnexpectedArgumentException : CommandLineParseException
     /// <summary>Contains the first unexpected argument and all of the subsequent arguments.</summary>
     public string[] UnexpectedParameters { get; private set; }
     /// <summary>Constructor.</summary>
-    internal UnexpectedArgumentException(string[] unexpectedArgs, CommandInfo commandInfo) : this(unexpectedArgs, commandInfo, null) { }
+    public UnexpectedArgumentException(string[] unexpectedArgs, Func<Translation, int, ConsoleColoredString> helpGenerator) : this(unexpectedArgs, helpGenerator, null) { }
     /// <summary>Constructor.</summary>
-    internal UnexpectedArgumentException(string[] unexpectedArgs, CommandInfo commandInfo, Exception inner)
-        : base(tr => tr.UnexpectedParameter.ToConsoleColoredString().Fmt(unexpectedArgs.Select(prm => prm.Length > 50 ? prm.Substring(0, 47) + "..." : prm).FirstOrDefault().Color(CmdLineColor.UnexpectedArgument)), commandInfo, inner)
+    public UnexpectedArgumentException(string[] unexpectedArgs, Func<Translation, int, ConsoleColoredString> helpGenerator, Exception inner)
+        : base(tr => tr.UnexpectedParameter.ToConsoleColoredString().Fmt(unexpectedArgs.Select(prm => prm.Length > 50 ? prm.Substring(0, 47) + "..." : prm).FirstOrDefault().Color(CmdLineColor.UnexpectedArgument)), helpGenerator, inner)
     {
         UnexpectedParameters = unexpectedArgs;
     }
@@ -1876,10 +1724,10 @@ public sealed class InvalidNumericParameterException : CommandLineParseException
     /// <summary>Contains the name of the field pertaining to the parameter that was passed an invalid value.</summary>
     public string FieldName { get; private set; }
     /// <summary>Constructor.</summary>
-    internal InvalidNumericParameterException(string fieldName, CommandInfo commandInfo) : this(fieldName, commandInfo, null) { }
+    public InvalidNumericParameterException(string fieldName, Func<Translation, int, ConsoleColoredString> helpGenerator) : this(fieldName, helpGenerator, null) { }
     /// <summary>Constructor.</summary>
-    internal InvalidNumericParameterException(string fieldName, CommandInfo commandInfo, Exception inner)
-        : base(tr => tr.InvalidNumber.ToConsoleColoredString().Fmt("<".Color(CmdLineColor.FieldBrackets) + fieldName.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets)), commandInfo, inner)
+    public InvalidNumericParameterException(string fieldName, Func<Translation, int, ConsoleColoredString> helpGenerator, Exception inner)
+        : base(tr => tr.InvalidNumber.ToConsoleColoredString().Fmt("<".Color(CmdLineColor.FieldBrackets) + fieldName.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets)), helpGenerator, inner)
     {
         FieldName = fieldName;
     }
@@ -1899,11 +1747,10 @@ public sealed class MissingParameterException : CommandLineParseException
     ///     Specifies whether the missing parameter was a missing option (true) or a missing positional parameter (false).</summary>
     public bool IsOption { get; private set; }
     /// <summary>Constructor.</summary>
-    internal MissingParameterException(FieldInfo paramField, FieldInfo beforeField, bool isOption, CommandInfo commandInfo) : this(paramField, beforeField, isOption, commandInfo, null) { }
+    public MissingParameterException(FieldInfo paramField, FieldInfo beforeField, bool isOption, Func<Translation, int, ConsoleColoredString> helpGenerator) : this(paramField, beforeField, isOption, helpGenerator, null) { }
     /// <summary>Constructor.</summary>
-    internal MissingParameterException(FieldInfo paramField, FieldInfo beforeField, bool isOption, CommandInfo commandInfo, Exception inner)
-        : base(tr => getMessage(tr, paramField, beforeField, isOption), commandInfo, inner)
-    { Field = paramField; BeforeField = beforeField; IsOption = isOption; }
+    public MissingParameterException(FieldInfo paramField, FieldInfo beforeField, bool isOption, Func<Translation, int, ConsoleColoredString> helpGenerator, Exception inner)
+        : base(tr => getMessage(tr, paramField, beforeField, isOption), helpGenerator, inner) { Field = paramField; BeforeField = beforeField; IsOption = isOption; }
 
     private static ConsoleColoredString getMessage(Translation tr, FieldInfo field, FieldInfo beforeField, bool isOption)
     {
@@ -1914,20 +1761,6 @@ public sealed class MissingParameterException : CommandLineParseException
             field.FormatParameterUsage(true),
             "<".Color(CmdLineColor.FieldBrackets) + beforeField.Name.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets));
     }
-}
-
-/// <summary>
-///     Specifies that the command-line parser encountered the end of the command line when it expected a mandatory
-///     subcommand.</summary>
-[Serializable]
-public sealed class MissingSubcommandException : CommandLineParseException
-{
-    /// <summary>Constructor.</summary>
-    internal MissingSubcommandException(CommandInfo commandInfo) : this(commandInfo, null) { }
-    /// <summary>Constructor.</summary>
-    internal MissingSubcommandException(CommandInfo commandInfo, Exception inner)
-        : base(tr => tr.MissingSubcommand.ToConsoleColoredString(), commandInfo, inner)
-    { }
 }
 
 static class CmdLineExtensions
@@ -1993,12 +1826,5 @@ static class CmdLineExtensions
         return (isMandatory ? "{0} {1}" : "[{0} {1}]").Color(CmdLineColor.OptionalityDelimiters).Fmt(
             field.GetOrderedOptionAttributeNames().First().Color(CmdLineColor.Option),
             "<".Color(CmdLineColor.FieldBrackets) + field.Name.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets));
-    }
-
-    public static ConsoleColoredString GetDocumentation(this MemberInfo member, Type inType, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
-    {
-        if (member.IsDefined<DocumentationAttribute>())
-            return helpProcessor(member.GetCustomAttributes<DocumentationAttribute>().Select(d => d.Text ?? "").First());
-        return "";
     }
 }
