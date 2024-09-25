@@ -2,6 +2,8 @@
 
 namespace RT.CommandLine.Tests;
 
+#pragma warning disable CS0649 // Field is never assigned to and will always have its default value
+
 class Test1Cmd : ICommandLineValidatable
 {
     [IsPositional, IsMandatory]

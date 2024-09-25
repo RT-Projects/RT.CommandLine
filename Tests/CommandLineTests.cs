@@ -1,6 +1,5 @@
 ﻿using RT.Json;
 using RT.Serialization;
-using RT.Util.Consoles;
 using Xunit;
 
 namespace RT.CommandLine.Tests;
