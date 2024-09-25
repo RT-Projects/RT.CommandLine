@@ -1,4 +1,6 @@
-﻿using RT.Util.Consoles;
+﻿using RT.Json;
+using RT.Serialization;
+using RT.Util.Consoles;
 using Xunit;
 
 namespace RT.CommandLine.Tests;
@@ -92,50 +94,6 @@ public sealed class CmdLineTests
         }
     }
 
-
-    class Test1Cmd : ICommandLineValidatable
-    {
-        [IsPositional, IsMandatory]
-        public string Base;
-
-        [IsPositional, IsMandatory]
-        public Test1SubcommandBase Subcommand;
-
-        public static int ValidateCalled = 0;
-
-        public ConsoleColoredString Validate()
-        {
-            ValidateCalled++;
-            return null;
-        }
-    }
-
-    [CommandGroup]
-    abstract class Test1SubcommandBase : ICommandLineValidatable
-    {
-        public static int ValidateCalled = 0;
-        public abstract ConsoleColoredString Validate();
-    }
-
-    [CommandName("sub1")]
-    sealed class Test1Subcommand1 : Test1SubcommandBase
-    {
-        [IsPositional, IsMandatory]
-        public string ItemName;
-
-        public override ConsoleColoredString Validate()
-        {
-            ValidateCalled++;
-            return null;
-        }
-    }
-
-    [CommandName("sub2")]
-    sealed class Test1Subcommand2 : Test1SubcommandBase
-    {
-        public override ConsoleColoredString Validate() { return null; }
-    }
-
     [Fact]
     public static void TestSubcommandValidation()
     {
@@ -156,5 +114,17 @@ public sealed class CmdLineTests
         Assert.IsType<Test1Subcommand2>(c2.Subcommand);
         Assert.Equal(1, Test1Cmd.ValidateCalled);
         Assert.Equal(0, Test1SubcommandBase.ValidateCalled);
+    }
+
+    [Fact]
+    public static void TestMore()
+    {
+        Assert.True(
+            JsonValue.Parse(@"{""Boolean"":true,""Subcommand"":{""SharedString"":null,""Name"":""this"","":type"":""Test2SubcommandAdd""}}")
+            == ClassifyJson.Serialize(CommandLineParser.Parse<Test2Cmd>(["-b", "add", "this"])));
+
+        Assert.True(
+            JsonValue.Parse(@"{""Boolean"":false,""Subcommand"":{""SharedString"":null,""Id"":""this"","":type"":""Test2SubcommandDelete""}}")
+            == ClassifyJson.Serialize(CommandLineParser.Parse<Test2Cmd>(["del", "this"])));
     }
 }

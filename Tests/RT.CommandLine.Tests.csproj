@@ -9,8 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
-    <PackageReference Include="xunit" Version="2.9.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="RT.Serialization" Version="2.0.1774" />
+    <PackageReference Include="RT.Serialization.Json" Version="2.0.1774" />
+    <PackageReference Include="xunit" Version="2.9.1" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
@@ -22,7 +24,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SrcLingo\RT.CommandLine.Lingo.csproj" />
     <ProjectReference Include="..\Src\RT.CommandLine.csproj" />
   </ItemGroup>
 

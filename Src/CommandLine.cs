@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using RT.Internal;
 using RT.PostBuild;
 using RT.Util;

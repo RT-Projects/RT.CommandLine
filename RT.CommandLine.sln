@@ -4,8 +4,6 @@ VisualStudioVersion = 17.8.34330.188
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RT.CommandLine", "Src\RT.CommandLine.csproj", "{DED68431-337E-439C-94E4-ACE2E5363178}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RT.CommandLine.Lingo", "SrcLingo\RT.CommandLine.Lingo.csproj", "{DC6401A1-14F1-44E3-A121-43CC2F192809}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RT.CommandLine.Tests", "Tests\RT.CommandLine.Tests.csproj", "{294D2B02-3FA6-4B9A-82BF-F80396943892}"
 EndProject
 Global
@@ -18,10 +16,6 @@ Global
 		{DED68431-337E-439C-94E4-ACE2E5363178}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DED68431-337E-439C-94E4-ACE2E5363178}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DED68431-337E-439C-94E4-ACE2E5363178}.Release|Any CPU.Build.0 = Release|Any CPU
-		{DC6401A1-14F1-44E3-A121-43CC2F192809}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{DC6401A1-14F1-44E3-A121-43CC2F192809}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{DC6401A1-14F1-44E3-A121-43CC2F192809}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{DC6401A1-14F1-44E3-A121-43CC2F192809}.Release|Any CPU.Build.0 = Release|Any CPU
 		{294D2B02-3FA6-4B9A-82BF-F80396943892}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{294D2B02-3FA6-4B9A-82BF-F80396943892}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{294D2B02-3FA6-4B9A-82BF-F80396943892}.Release|Any CPU.ActiveCfg = Release|Any CPU
