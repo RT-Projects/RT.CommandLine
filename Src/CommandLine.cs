@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Reflection;
 using RT.Internal;
 using RT.PostBuild;
@@ -1395,11 +1395,27 @@ public abstract class CommandLineParseException(ConsoleColoredString message, Fu
     ///     understand.</summary>
     public virtual void WriteUsageInfoToConsole()
     {
-        ConsoleUtil.Write(GenerateHelp(ConsoleUtil.WrapToWidth()));
-
-        Console.WriteLine();
-        ConsoleUtil.Write(GenerateErrorText(ConsoleUtil.WrapToWidth()));
+        ConsoleUtil.Write(GetUsageInfo());
     }
+
+    /// <summary>
+    ///     Generates and returns usage information, followed by an error message describing to the user what it was that the
+    ///     parser didn't understand.</summary>
+    public ConsoleColoredString GetUsageInfo()
+    {
+        var s = GenerateHelp(ConsoleUtil.WrapToWidth());
+        if (WriteErrorText)
+            s += Environment.NewLine + GenerateErrorText(ConsoleUtil.WrapToWidth());
+        return s;
+    }
+
+    /// <summary>
+    ///     Determines whether <see cref="WriteUsageInfoToConsole"/> and <see cref="GetUsageInfo"/> should call <see
+    ///     cref="GenerateErrorText"/> and output it to the console. Default is <c>true</c>.</summary>
+    /// <remarks>
+    ///     Only set this to <c>false</c> if the user explicitly asked to see the help screen. Otherwise its appearance
+    ///     without explanation is confusing.</remarks>
+    protected internal virtual bool WriteErrorText => true;
 }
 
 /// <summary>Indicates that the user supplied one of the standard options we recognize as a help request.</summary>
@@ -1409,6 +1425,8 @@ public sealed class CommandLineHelpRequestedException(Func<int, ConsoleColoredSt
 {
     /// <summary>Prints usage information.</summary>
     public override void WriteUsageInfoToConsole() => ConsoleUtil.Write(GenerateHelp(ConsoleUtil.WrapToWidth()));
+    /// <inheritdoc/>
+    protected internal override bool WriteErrorText => false;
 }
 
 /// <summary>Specifies that the arguments specified by the user on the command-line do not pass the custom validation checks.</summary>
