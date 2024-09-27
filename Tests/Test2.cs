@@ -6,7 +6,7 @@ class Test2Cmd
 {
     [Option("-b")]
     public bool Boolean;
-
+    [IsPositional]
     public Test2Subcommand Subcommand;
 }
 

@@ -12,6 +12,7 @@ class Test1Cmd : ICommandLineValidatable
     [IsPositional, IsMandatory]
     public Test1SubcommandBase Subcommand;
 
+    [Ignore]
     public static int ValidateCalled = 0;
 
     public ConsoleColoredString Validate()

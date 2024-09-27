@@ -1,4 +1,5 @@
 ﻿using RT.Json;
+using RT.PostBuild;
 using RT.Serialization;
 using Xunit;
 
@@ -125,5 +126,23 @@ public sealed class CmdLineTests
         Assert.True(
             JsonValue.Parse(@"{""Boolean"":false,""Subcommand"":{""SharedString"":null,""Id"":""this"","":type"":""Test2SubcommandDelete""}}")
             == ClassifyJson.Serialize(CommandLineParser.Parse<Test2Cmd>(["del", "this"])));
+    }
+
+    [Fact]
+    public static void TestPostBuild()
+    {
+        var reporter = new Reporter();
+        CommandLineParser.PostBuildStep<CommandLineWithOption>(reporter);
+        CommandLineParser.PostBuildStep<CommandLineWithArray>(reporter);
+        CommandLineParser.PostBuildStep<Test1Cmd>(reporter);
+        CommandLineParser.PostBuildStep<Test2Cmd>(reporter);
+    }
+
+    class Reporter : IPostBuildReporter
+    {
+        public void Error(string message, params string[] tokens) => throw new Exception(message);
+        public void Error(string message, string filename, int lineNumber, int? columnNumber = null) => throw new Exception(message);
+        public void Warning(string message, params string[] tokens) { }
+        public void Warning(string message, string filename, int lineNumber, int? columnNumber = null) { }
     }
 }
