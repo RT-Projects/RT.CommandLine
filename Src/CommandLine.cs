@@ -1,3 +1,4 @@
+﻿using System.Diagnostics;
 using System.Reflection;
 using RT.Internal;
 using RT.PostBuild;
@@ -457,7 +458,7 @@ public static class CommandLineParser
                     {
                         missingMandatories.Remove(field);
                         positionals.RemoveAt(0);
-                        foreach (var subclass in field.FieldType.Assembly.GetTypes().Where(t => !t.IsAbstract && t.IsSubclassOf(field.FieldType)))
+                        foreach (var subclass in allTypes().Where(t => !t.IsAbstract && t.IsSubclassOf(field.FieldType)))
                             if (subclass.GetCustomAttributes<CommandNameAttribute>().First().Names.Any(c => c.Equals(args[i], StringComparison.OrdinalIgnoreCase)))
                             {
                                 field.SetValue(ret, parseCommandLine(args, subclass, i + 1, helpProcessor));
@@ -518,6 +519,8 @@ public static class CommandLineParser
         return ret;
     }
 
+    private static IEnumerable<Type> allTypes() => AppDomain.CurrentDomain.GetAssemblies().SelectMany(asm => asm.GetTypes());
+
     private static bool convertStringAndSetField(string value, object cmdLineObject, FieldInfo field)
     {
         object result;
@@ -545,7 +548,7 @@ public static class CommandLineParser
 
             var helpString = new List<ConsoleColoredString>();
             var commandNameAttr = type.GetCustomAttributes<CommandNameAttribute>().FirstOrDefault();
-            string commandName = commandNameAttr == null ? Path.GetFileNameWithoutExtension(Assembly.GetEntryAssembly().Location) : "... " + commandNameAttr.Names.OrderByDescending(c => c.Length).First();
+            string commandName = commandNameAttr == null ? Process.GetCurrentProcess().ProcessName : "... " + commandNameAttr.Names.OrderByDescending(c => c.Length).First();
 
             //
             //  ##  CONSTRUCT THE “USAGE” LINE
@@ -706,7 +709,7 @@ public static class CommandLineParser
         else if (field.FieldType.IsDefined<CommandGroupAttribute>())
         {
             int origRow = row;
-            foreach (var ty in field.FieldType.Assembly.GetTypes()
+            foreach (var ty in allTypes()
                 .Where(t => t.IsSubclassOf(field.FieldType) && t.IsDefined<CommandNameAttribute>() && !t.IsAbstract && !t.IsDefined<UndocumentedAttribute>())
                 .OrderBy(t => t.GetCustomAttributes<CommandNameAttribute>().First().Names.MinElement(c => c.Length)))
             {
@@ -919,7 +922,7 @@ public static class CommandLineParser
                     rep.Error($"{commandLineType.FullName}.{field.Name}: CommandGroup fields must be declared [IsPositional].", "class " + commandLineType.Name, field.Name);
 
                 // The class must have at least two subclasses with a [CommandName] attribute
-                var subclasses = field.FieldType.Assembly.GetTypes().Where(t => !t.IsAbstract && t.IsSubclassOf(field.FieldType));
+                var subclasses = allTypes().Where(t => !t.IsAbstract && t.IsSubclassOf(field.FieldType));
                 if (!subclasses.Any())
                     rep.Error($"{commandLineType.FullName}.{field.Name}: The CommandGroup class type must have at least one non-abstract derived class with the [CommandName] attribute.", "class " + field.FieldType.Name);
 
