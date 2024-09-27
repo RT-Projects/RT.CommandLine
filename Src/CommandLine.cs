@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Reflection;
 using RT.Internal;
 using RT.PostBuild;
@@ -219,10 +219,8 @@ public static class CommandLineParser
         FieldInfo swallowingField = null;
         var haveSeenOptionalPositional = false;
 
-        foreach (var fieldForeach in type.GetFields())
+        foreach (var field in type.GetFields())
         {
-            var field = fieldForeach; // This is necessary for the lambda expressions to work
-
             if (field.IsDefined<IgnoreAttribute>())
                 continue;
 
@@ -279,7 +277,7 @@ public static class CommandLineParser
                     var infos = option == null
                         ? field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public).Select(enumField => new
                         {
-                            Options = enumField.GetOrderedOptionAttributeNames().ToArray(),
+                            Options = enumField.GetOrderedOptionAttributeNames(),
                             NeedCommandName = false,
                             GetEnumValue = Ut.Lambda((string commandName) => enumField.GetRawConstantValue())
                         })
@@ -299,15 +297,13 @@ public static class CommandLineParser
                     object prev = null;
                     string prevOptionOrCommand = null;
 
-                    foreach (var infForeach in infos)
+                    foreach (var inf in infos)
                     {
-                        var inf = infForeach;
                         if (inf.Options == null)
                             // Assume that this is the default option
                             continue;
-                        foreach (var oForeach in inf.Options)
+                        foreach (var o in inf.Options)
                         {
-                            var o = oForeach;
                             options[o] = () =>
                             {
                                 i++;
@@ -356,7 +352,7 @@ public static class CommandLineParser
             // ### BOOL fields
             else if (field.FieldType == typeof(bool))
             {
-                foreach (var o in field.GetOrderedOptionAttributeNames())
+                foreach (var o in field.GetOrderedOptionAttributeNames() ?? [])
                     options[o] = () => { field.SetValue(ret, true); i++; missingMandatories.Remove(field); };
             }
             // ### STRING and INTEGER fields (including nullable)
@@ -385,9 +381,8 @@ public static class CommandLineParser
                 }
                 else
                 {
-                    foreach (var oForeach in field.GetOrderedOptionAttributeNames())
+                    foreach (var o in field.GetOrderedOptionAttributeNames() ?? [])
                     {
-                        var o = oForeach;
                         options[o] = () =>
                         {
                             i++;
@@ -430,9 +425,8 @@ public static class CommandLineParser
                 else
                 {
                     string[] prev = null;
-                    foreach (var oForeach in field.GetOrderedOptionAttributeNames())
+                    foreach (var o in field.GetOrderedOptionAttributeNames() ?? [])
                     {
-                        var o = oForeach;
                         options[o] = () =>
                         {
                             i++;
@@ -810,7 +804,7 @@ public static class CommandLineParser
 
             // Every field must have one of the following
             var positional = field.IsDefined<IsPositionalAttribute>();
-            var options = field.GetOrderedOptionAttributeNames().ToArray();
+            var options = field.GetOrderedOptionAttributeNames();
             var enumOpt = field.GetCustomAttributes<EnumOptionsAttribute>().FirstOrDefault();
 
             if (!positional && options == null && enumOpt == null)
@@ -1538,10 +1532,10 @@ public sealed class MissingParameterException(FieldInfo paramField, FieldInfo be
 
 static class CmdLineExtensions
 {
-    public static IEnumerable<string> GetOrderedOptionAttributeNames(this MemberInfo member)
+    public static string[] GetOrderedOptionAttributeNames(this MemberInfo member)
     {
         var attr = member.GetCustomAttributes<OptionAttribute>().FirstOrDefault();
-        return attr == null ? [] : attr.Names.OrderBy(compareOptionNames);
+        return attr == null ? null : attr.Names.OrderBy(compareOptionNames).ToArray();
     }
 
     private static int compareOptionNames(string opt1, string opt2)
