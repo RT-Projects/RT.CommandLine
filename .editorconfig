@@ -289,6 +289,12 @@ dotnet_diagnostic.ide0044.severity = none
 # IDE0042: Deconstruct variable declaration
 dotnet_diagnostic.ide0042.severity = none
 
+# IDE0305: Simplify collection initialization
+dotnet_diagnostic.ide0305.severity = none
+
+# IDE0057: Substring can be simplified
+dotnet_diagnostic.ide0057.severity = none
+
 # CS1998: Async method lacks 'await' operators and will run synchronously
 dotnet_diagnostic.cs1998.severity = none
 
