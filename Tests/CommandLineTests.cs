@@ -129,6 +129,17 @@ public sealed class CmdLineTests
     }
 
     [Fact]
+    public static void TestSubcommandIntermediate()
+    {
+        var c3 = CommandLineParser.Parse<Test3Cmd>(["sub", "base", "subbase", "item"]);
+        Assert.IsType<Test3SubCmd>(c3.Cmd);
+        var cs3 = (Test3SubCmd) c3.Cmd;
+        Assert.Equal("base", cs3.Base);
+        Assert.Equal("subbase", cs3.SubBase);
+        Assert.Equal("item", cs3.ItemName);
+    }
+
+    [Fact]
     public static void TestPostBuild()
     {
         var reporter = new Reporter();
@@ -136,6 +147,7 @@ public sealed class CmdLineTests
         CommandLineParser.PostBuildStep<CommandLineWithArray>(reporter);
         CommandLineParser.PostBuildStep<Test1Cmd>(reporter);
         CommandLineParser.PostBuildStep<Test2Cmd>(reporter);
+        CommandLineParser.PostBuildStep<Test3Cmd>(reporter);
     }
 
     class Reporter : IPostBuildReporter
