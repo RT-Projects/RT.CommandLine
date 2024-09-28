@@ -289,7 +289,7 @@ public static class CommandLineParser
                                     ?? throw new UnrecognizedCommandOrOptionException(commandName, getHelpGenerator(type, helpProcessor));
                                 return enumField.GetRawConstantValue();
                             })
-                        }).AsEnumerable();
+                        });
 
                     object prev = null;
                     string prevOptionOrCommand = null;
