@@ -219,11 +219,8 @@ public static class CommandLineParser
         FieldInfo swallowingField = null;
         var haveSeenOptionalPositional = false;
 
-        foreach (var field in type.GetFields())
+        foreach (var field in type.GetCommandLineFields())
         {
-            if (field.IsDefined<IgnoreAttribute>())
-                continue;
-
             var positional = field.IsDefined<IsPositionalAttribute>();
             var option = field.GetCustomAttributes<OptionAttribute>().FirstOrDefault();
             var mandatory = field.IsDefined<IsMandatoryAttribute>();
@@ -745,11 +742,13 @@ public static class CommandLineParser
         optionalPositional = [];
         mandatoryPositional = [];
 
-        foreach (var field in type.GetFields().Where(f => !f.IsDefined<UndocumentedAttribute>() && !f.IsDefined<IgnoreAttribute>()))
-            (field.IsDefined<IsMandatoryAttribute>()
+        foreach (var field in type.GetCommandLineFields().Where(f => !f.IsDefined<UndocumentedAttribute>()))
+        {
+            var fieldInfos = field.IsDefined<IsMandatoryAttribute>()
                 ? (field.IsDefined<IsPositionalAttribute>() ? mandatoryPositional : mandatoryOptions)
-                : (field.IsDefined<IsPositionalAttribute>() ? optionalPositional : optionalOptions)
-            ).Add(field);
+                : (field.IsDefined<IsPositionalAttribute>() ? optionalPositional : optionalOptions);
+            fieldInfos.Add(field);
+        }
     }
 
     private static ConsoleColoredString getDocumentation(MemberInfo member, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor) =>
@@ -794,11 +793,8 @@ public static class CommandLineParser
 
         checkDocumentation(rep, commandLineType, classDocRecommended);
 
-        foreach (var field in commandLineType.GetFields())
+        foreach (var field in commandLineType.GetCommandLineFields())
         {
-            if (field.IsDefined<IgnoreAttribute>())
-                continue;
-
             if (lastField != null)
                 rep.Error($"The type of {lastField.DeclaringType.FullName}.{lastField.Name} necessitates that it is the last one in the class.", "class " + commandLineType.Name, field.Name);
 
@@ -876,7 +872,7 @@ public static class CommandLineParser
                     {
                         // check that the non-default enum values’ Options are present and do not clash
                         var optionNames = enumField.GetOrderedOptionAttributeNames();
-                        if (optionNames == null || !optionNames.Any())
+                        if (optionNames == null || optionNames.Length > 0)
                             rep.Error($"{field.FieldType.FullName}.{enumField.Name} (used by {commandLineType.FullName}.{field.Name}): Enum value must have an [Option] attribute with at least one option name (unless it is the field's default value and the field is optional).", "enum " + field.FieldType.Name, enumField.Name);
                         else
                             checkOptionsUnique(rep, optionNames, optionTaken, commandLineType, field, enumField);

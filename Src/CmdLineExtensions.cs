@@ -8,11 +8,8 @@ namespace RT.CommandLine;
 
 static class CmdLineExtensions
 {
-    public static string[] GetOrderedOptionAttributeNames(this MemberInfo member)
-    {
-        var attr = member.GetCustomAttributes<OptionAttribute>().FirstOrDefault();
-        return attr == null ? null : attr.Names.OrderBy(compareOptionNames).ToArray();
-    }
+    public static string[] GetOrderedOptionAttributeNames(this MemberInfo member) =>
+        member.GetCustomAttributes<OptionAttribute>().FirstOrDefault()?.Names.OrderBy(compareOptionNames).ToArray();
 
     private static int compareOptionNames(string opt1, string opt2)
     {
@@ -70,4 +67,9 @@ static class CmdLineExtensions
             field.GetOrderedOptionAttributeNames().First().Color(CmdLineColor.Option),
             "<".Color(CmdLineColor.FieldBrackets) + field.Name.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets));
     }
+
+    public static IEnumerable<FieldInfo> GetCommandLineFields(this Type type) =>
+        type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+            .Where(f => !f.IsDefined<IgnoreAttribute>())
+            .OrderBy(f => f.DeclaringType.SelectChain(t => t.BaseType).Count());
 }
