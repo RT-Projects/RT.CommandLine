@@ -21,7 +21,7 @@ jobs:
           script: |
             const script = require(require('path').resolve('./.github/workflows/version.js'))
             const vs = script({ context, github, firstRev: 'a3c6d6ad' });
-            const majmin = '2.1';
+            const majmin = '2.2';
             let ver_str = vs.formatVersion(`${majmin}.$(GitRevCount)-$(GitBranch) [$(GitSha6)/$(yyyy)-$(mm)-$(dd)]`);
             let ver_suf = vs.formatVersion('$(GitBranch)');
             if (ver_suf == 'main') {
