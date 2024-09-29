@@ -20,7 +20,7 @@ namespace RT.CommandLine;
 ///             It must be a reference type (a class) and it must have a parameterless constructor.</description></item>
 ///         <item><description>
 ///             <para>
-///                 Every field in the class must have one of the following custom attributes:</para>
+///                 Field with any of the following custom attributes are processed by <see cref="CommandLineParser"/>:</para>
 ///             <list type="bullet">
 ///                 <item><description>
 ///                     <see cref="IsPositionalAttribute"/> (allowed for all supported types except <c>bool</c>) — specifies
@@ -35,8 +35,7 @@ namespace RT.CommandLine;
 ///                     parameter that can be invoked by one of several options, which are specified on the enum values in the
 ///                     enum type.</description></item>
 ///                 <item><description>
-///                     <see cref="IgnoreAttribute"/> — specifies that <see cref="CommandLineParser"/> shall completely ignore
-///                     the field.</description></item></list></description></item>
+///                     Any field that has none of those three is completely ignored.</description></item></list></description></item>
 ///         <item><description>
 ///             <para>
 ///                 Each field may optionally have any of the following custom attributes:</para>
@@ -113,10 +112,9 @@ namespace RT.CommandLine;
 ///         <item><description>
 ///             <para>
 ///                 Every field must have documentation or be explicitly marked with <see cref="UndocumentedAttribute"/>,
-///                 except for fields that use <see cref="EnumOptionsAttribute"/> or <see cref="IgnoreAttribute"/>. For every
-///                 field whose type is an enum type, the values in the enum type must also have documentation or <see
-///                 cref="UndocumentedAttribute"/>, except for the enum value that corresponds to the field’s default value if
-///                 the field is not mandatory.</para>
+///                 except for fields that use <see cref="EnumOptionsAttribute"/>. For every field whose type is an enum type,
+///                 the values in the enum type must also have documentation or <see cref="UndocumentedAttribute"/>, except
+///                 for the enum value that corresponds to the field’s default value if the field is not mandatory.</para>
 ///             <para>
 ///                 Documentation is provided in one of the following ways:</para>
 ///             <list type="bullet">
@@ -850,8 +848,6 @@ public static class CommandLineParser
 
                 foreach (var enumField in field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public))
                 {
-                    if (enumField.IsDefined<IgnoreAttribute>())
-                        continue;
                     // If the field is not mandatory, it is allowed to have a default value
                     if (!mandatory && enumField.GetValue(null).Equals(defaultValue))
                         continue;
