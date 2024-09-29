@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+using System.Reflection;
+using RT.Util;
 using RT.Util.Consoles;
 using RT.Util.ExtensionMethods;
 
@@ -181,14 +182,30 @@ public sealed class InvalidNumericParameterException(string fieldName, Func<int,
     public InvalidNumericParameterException(string fieldName, Func<int, ConsoleColoredString> helpGenerator) : this(fieldName, helpGenerator, null) { }
 }
 
-/// <summary>
-///     Indicates that the arguments specified by the user on the command-line do not pass the custom validation check.</summary>
-/// <param name="message">
-///     Provide a helpful, descriptive message for the user to determine how to provide a valid command-line parameter.</param>
-/// <param name="helpGenerator">
-///     Used internally to generate the help screen; omit if throwing from a validation check.</param>
+/// <summary>Indicates that the arguments specified by the user on the command-line do not pass the custom validation check.</summary>
 [Serializable]
-public sealed class CommandLineValidationException(ConsoleColoredString message, Func<int, ConsoleColoredString> helpGenerator = null)
-    : CommandLineParseException(message, helpGenerator)
+public sealed class CommandLineValidationException : CommandLineParseException
 {
+    /// <summary>Constructor.</summary>
+    internal CommandLineValidationException(ConsoleColoredString message, Func<int, ConsoleColoredString> helpGenerator) : base(message, helpGenerator) { }
+
+    /// <summary>
+    ///     Constructor.</summary>
+    /// <param name="message">
+    ///     Provide a helpful, descriptive message for the user to determine how to provide a valid command-line parameter.</param>
+    public CommandLineValidationException(ConsoleColoredString message) : base(message, null) { }
+
+    /// <summary>
+    ///     Constructor.</summary>
+    /// <param name="message">
+    ///     Provide a helpful, descriptive message for the user to determine how to provide a valid command-line parameter.
+    ///     This message is colorized with <see cref="CommandLineParser.Colorize(RhoElement)"/>.</param>
+    public CommandLineValidationException(RhoElement message) : base(CommandLineParser.Colorize(message), null) { }
+
+    /// <summary>
+    ///     Constructor.</summary>
+    /// <param name="message">
+    ///     Provide a helpful, descriptive message for the user to determine how to provide a valid command-line parameter.
+    ///     This message is colorized with <see cref="CommandLineParser.Colorize(EggsNode)"/>.</param>
+    public CommandLineValidationException(EggsNode message) : base(CommandLineParser.Colorize(message), null) { }
 }
