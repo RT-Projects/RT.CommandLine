@@ -498,12 +498,15 @@ public static class CommandLineParser
         if (missingMandatories.Count > 0)
             throw new MissingParameterException(missingMandatories[0], swallowingField, !missingMandatories[0].IsDefined<IsPositionalAttribute>(), getHelpGenerator(type, helpProcessor));
 
-        ConsoleColoredString error = null;
-        if (typeof(ICommandLineValidatable).IsAssignableFrom(type))
-            error = ((ICommandLineValidatable) ret).Validate();
-
-        if (error != null)
-            throw new CommandLineValidationException(error, getHelpGenerator(type, helpProcessor));
+        try
+        {
+            if (ret is ICommandLineValidatable v)
+                v.Validate();
+        }
+        catch (CommandLineValidationException exc) when (exc.GenerateHelpFunc == null)
+        {
+            throw new CommandLineValidationException(exc.Message, getHelpGenerator(type, helpProcessor));
+        }
 
         return ret;
     }

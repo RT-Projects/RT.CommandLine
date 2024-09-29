@@ -181,9 +181,14 @@ public sealed class InvalidNumericParameterException(string fieldName, Func<int,
     public InvalidNumericParameterException(string fieldName, Func<int, ConsoleColoredString> helpGenerator) : this(fieldName, helpGenerator, null) { }
 }
 
-/// <summary>Specifies that the arguments specified by the user on the command-line do not pass the custom validation checks.</summary>
+/// <summary>
+///     Indicates that the arguments specified by the user on the command-line do not pass the custom validation check.</summary>
+/// <param name="message">
+///     Provide a helpful, descriptive message for the user to determine how to provide a valid command-line parameter.</param>
+/// <param name="helpGenerator">
+///     Used internally to generate the help screen; omit if throwing from a validation check.</param>
 [Serializable]
-public sealed class CommandLineValidationException(ConsoleColoredString message, Func<int, ConsoleColoredString> helpGenerator)
+public sealed class CommandLineValidationException(ConsoleColoredString message, Func<int, ConsoleColoredString> helpGenerator = null)
     : CommandLineParseException(message, helpGenerator)
 {
 }

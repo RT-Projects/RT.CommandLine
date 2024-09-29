@@ -14,10 +14,9 @@ class Test1Cmd : ICommandLineValidatable
 
     public static int ValidateCalled = 0;
 
-    public ConsoleColoredString Validate()
+    public void Validate()
     {
         ValidateCalled++;
-        return null;
     }
 }
 
@@ -25,7 +24,7 @@ class Test1Cmd : ICommandLineValidatable
 abstract class Test1SubcommandBase : ICommandLineValidatable
 {
     public static int ValidateCalled = 0;
-    public abstract ConsoleColoredString Validate();
+    public abstract void Validate();
 }
 
 [CommandName("sub1")]
@@ -34,15 +33,14 @@ sealed class Test1Subcommand1 : Test1SubcommandBase
     [IsPositional, IsMandatory]
     public string ItemName;
 
-    public override ConsoleColoredString Validate()
+    public override void Validate()
     {
         ValidateCalled++;
-        return null;
     }
 }
 
 [CommandName("sub2")]
 sealed class Test1Subcommand2 : Test1SubcommandBase
 {
-    public override ConsoleColoredString Validate() { return null; }
+    public override void Validate() { }
 }
