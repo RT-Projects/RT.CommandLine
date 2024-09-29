@@ -500,8 +500,8 @@ public static class CommandLineParser
 
         try
         {
-            if (ret is ICommandLineValidatable v)
-                v.Validate();
+            if (ret is ICommandLineProcessed v)
+                v.Process();
         }
         catch (CommandLineValidationException exc) when (exc.GenerateHelpFunc == null)
         {
