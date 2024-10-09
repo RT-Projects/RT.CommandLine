@@ -505,7 +505,7 @@ public static class CommandLineParser
         }
         catch (CommandLineValidationException exc) when (exc.GenerateHelpFunc == null)
         {
-            throw new CommandLineValidationException(exc.Message, getHelpGenerator(type, helpProcessor));
+            throw new CommandLineValidationException(exc.ColoredMessage, getHelpGenerator(type, helpProcessor));
         }
 
         return ret;

@@ -31,14 +31,6 @@ public sealed class IsMandatoryAttribute() : Attribute
 {
 }
 
-/// <summary>Specifies that the command-line parser should ignore a field.</summary>
-[AttributeUsage(AttributeTargets.Field, Inherited = false, AllowMultiple = false)]
-public sealed class IgnoreAttribute : Attribute
-{
-    /// <summary>Constructor.</summary>
-    public IgnoreAttribute() { }
-}
-
 /// <summary>
 ///     Specifies that a field of an enum type should be interpreted as multiple possible options, each specified by an <see
 ///     cref="OptionAttribute"/> on the enum values in the enum type.</summary>
