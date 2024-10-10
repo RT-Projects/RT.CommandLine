@@ -10,9 +10,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
-    <PackageReference Include="RT.Serialization" Version="2.0.1774" />
-    <PackageReference Include="RT.Serialization.Json" Version="2.0.1774" />
-    <PackageReference Include="xunit" Version="2.9.1" />
+    <PackageReference Include="RT.Serialization" Version="2.0.1776" />
+    <PackageReference Include="RT.Serialization.Json" Version="2.0.1776" />
+    <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
