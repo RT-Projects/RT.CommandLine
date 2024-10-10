@@ -1,4 +1,4 @@
-﻿using RT.Util;
+using RT.Util;
 using RT.Util.Consoles;
 
 namespace RT.CommandLine;
@@ -18,11 +18,13 @@ public sealed class OptionAttribute(params string[] names) : Attribute
 /// <summary>
 ///     Use this to specify that a command-line parameter is positional, i.e. is not invoked by an option that starts with
 ///     "-".</summary>
+/// <param name="order">
+///     Optionally use this to re-order positional arguments differently from their declaration order.</param>
 [AttributeUsage(AttributeTargets.Field, Inherited = false, AllowMultiple = false), RummageKeepUsersReflectionSafe]
-public sealed class IsPositionalAttribute : Attribute
+public sealed class IsPositionalAttribute(double order = 0) : Attribute
 {
-    /// <summary>Constructor.</summary>
-    public IsPositionalAttribute() { }
+    /// <summary>Optionally use this to re-order positional arguments differently from their declaration order.</summary>
+    public double Order { get; private set; } = order;
 }
 
 /// <summary>Use this to specify that a command-line parameter is mandatory.</summary>

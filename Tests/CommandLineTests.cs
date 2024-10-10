@@ -150,6 +150,40 @@ public sealed class CmdLineTests
         CommandLineParser.PostBuildStep<Test3Cmd>(reporter);
     }
 
+    [Fact]
+    public static void TestPositionalOrder()
+    {
+        static void Test<T>(string helpPart, int[] oneTwoThree)
+        {
+            try { CommandLineParser.Parse<T>([]); }
+            catch (CommandLineParseException e) { Assert.Matches($@"\AUsage: .* {helpPart}", e.GenerateHelp().ToString()); }
+            dynamic cmd = CommandLineParser.Parse<T>(["1", "2", "3"]);
+            Assert.Equal(oneTwoThree[0], (int) cmd.One);
+            Assert.Equal(oneTwoThree[1], (int) cmd.Two);
+            Assert.Equal(oneTwoThree[2], (int) cmd.Three);
+        }
+
+        Test<Test4Cmd1>("<One> <Two> <Three>", [1, 2, 3]);
+        Test<Test4Cmd2>("<Three> <One> <Two>", [2, 3, 1]);
+        Test<Test4Cmd3>("<Two> <One> <Three>", [2, 1, 3]);
+    }
+
+    [Fact]
+    public static void TestPositionalMandatory()
+    {
+        // Mandatory, then optional — allowed
+        var cmd = CommandLineParser.Parse<Test5Cmd1>(["1", "2"]);
+        Assert.Equal(2, cmd.One);
+        Assert.Equal(1, cmd.Two);
+        var cmd2 = CommandLineParser.Parse<Test5Cmd1>(["8472"]);
+        Assert.Equal(47, cmd2.One);
+        Assert.Equal(8472, cmd2.Two);
+
+        // Optional, then mandatory — expect exception
+        var exc = Assert.Throws<InvalidOrderOfPositionalParametersException>(() => CommandLineParser.Parse<Test5Cmd2>(["1", "2"]));
+        Assert.Equal("The positional parameter <Test5Cmd2.Two> is optional, but is followed by positional parameter <Test5Cmd2.One> which is mandatory. Either mark <Test5Cmd2.Two> as mandatory or <Test5Cmd2.One> as optional.", exc.Message);
+    }
+
     class Reporter : IPostBuildReporter
     {
         public void Error(string message, params string[] tokens) => throw new Exception(message);

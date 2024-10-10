@@ -169,6 +169,28 @@ public sealed class InvalidNumericParameterException(string fieldName, Func<int,
     public string FieldName { get; private set; } = fieldName;
 }
 
+/// <summary>Specifies that a field in the class declaration has a type not supported by <see cref="CommandLineParser"/>.</summary>
+[Serializable]
+public sealed class UnsupportedTypeException(string fieldName, Func<int, ConsoleColoredString> helpGenerator, Exception inner = null)
+    : CommandLineParseException("The field {0} is of an unsupported type.".ToConsoleColoredString().Fmt("<".Color(CmdLineColor.FieldBrackets) + fieldName.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets)), helpGenerator, inner)
+{
+    /// <summary>Contains the name of the field pertaining to the parameter that was passed an invalid value.</summary>
+    public string FieldName { get; private set; } = fieldName;
+}
+
+/// <summary>Indicates that a mandatory positional parameter is defined to come after an optional positional parameter, which is not possible.</summary>
+[Serializable]
+public sealed class InvalidOrderOfPositionalParametersException(FieldInfo fieldOptional, FieldInfo fieldMandatory, Func<int, ConsoleColoredString> helpGenerator, Exception inner = null)
+    : CommandLineParseException("The positional parameter {0} is optional, but is followed by positional parameter {1} which is mandatory. Either mark {0} as mandatory or {1} as optional.".ToConsoleColoredString().Fmt(colorizedFieldName(fieldOptional), colorizedFieldName(fieldMandatory)), helpGenerator, inner)
+{
+    private static ConsoleColoredString colorizedFieldName(FieldInfo f) => "<".Color(CmdLineColor.FieldBrackets) + f.DeclaringType.Name.Color(CmdLineColor.Field) + ".".Color(CmdLineColor.FieldBrackets) + f.Name.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets);
+
+    /// <summary>Contains the name of the optional positional parameter that was followed by a mandatory positional parameter.</summary>
+    public FieldInfo FieldOptional { get; private set; } = fieldOptional;
+    /// <summary>Contains the name of the mandatory positional parameter that followed an optional positional parameter.</summary>
+    public FieldInfo FieldMandatory { get; private set; } = fieldMandatory;
+}
+
 /// <summary>Indicates that the arguments specified by the user on the command-line do not pass the custom validation check.</summary>
 [Serializable]
 public sealed class CommandLineValidationException : CommandLineParseException

@@ -184,6 +184,9 @@ public static class CommandLineParser
     {
         public Action ProcessParameter;
         public Action ProcessEndOfParameters;
+        public double Order;
+        public bool IsMandatory;
+        public FieldInfo Field;
     }
 
     /// <summary>
@@ -215,19 +218,12 @@ public static class CommandLineParser
         var positionals = new List<PositionalParameterInfo>();
         var missingMandatories = new List<FieldInfo>();
         FieldInfo swallowingField = null;
-        var haveSeenOptionalPositional = false;
 
         foreach (var field in type.GetCommandLineFields())
         {
-            var positional = field.IsDefined<IsPositionalAttribute>();
+            var positional = field.GetCustomAttribute<IsPositionalAttribute>()?.Order;
             var option = field.GetCustomAttributes<OptionAttribute>().FirstOrDefault();
             var mandatory = field.IsDefined<IsMandatoryAttribute>();
-
-            if (positional && mandatory && haveSeenOptionalPositional)
-                throw new InternalErrorException("Cannot have positional mandatory parameter after a positional optional one.");
-
-            if (positional && !mandatory)
-                haveSeenOptionalPositional = true;
 
             if (mandatory)
                 missingMandatories.Add(field);
@@ -236,10 +232,13 @@ public static class CommandLineParser
             if (field.FieldType.IsEnum)
             {
                 // ### ENUM fields, positional
-                if (positional)
+                if (positional is double order)
                 {
                     positionals.Add(new PositionalParameterInfo
                     {
+                        Order = order,
+                        IsMandatory = mandatory,
+                        Field = field,
                         ProcessParameter = () =>
                         {
                             positionals.RemoveAt(0);
@@ -354,10 +353,13 @@ public static class CommandLineParser
             else if (field.FieldType == typeof(string) || ExactConvert.IsTrueIntegerType(field.FieldType) || ExactConvert.IsTrueIntegerNullableType(field.FieldType) ||
                 field.FieldType == typeof(float) || field.FieldType == typeof(float?) || field.FieldType == typeof(double) || field.FieldType == typeof(double?))
             {
-                if (positional)
+                if (positional is double order)
                 {
                     positionals.Add(new PositionalParameterInfo
                     {
+                        Order = order,
+                        IsMandatory = mandatory,
+                        Field = field,
                         ProcessParameter = () =>
                         {
                             if (!convertStringAndSetField(args[i], ret, field))
@@ -396,10 +398,13 @@ public static class CommandLineParser
             // ### STRING[] fields
             else if (field.FieldType == typeof(string[]))
             {
-                if (positional)
+                if (positional is double order)
                 {
                     positionals.Add(new PositionalParameterInfo
                     {
+                        Order = order,
+                        IsMandatory = mandatory,
+                        Field = field,
                         ProcessParameter = () =>
                         {
                             missingMandatories.Remove(field);
@@ -443,6 +448,9 @@ public static class CommandLineParser
                 swallowingField = field;
                 positionals.Add(new PositionalParameterInfo
                 {
+                    Order = positional ?? 0,
+                    IsMandatory = mandatory,
+                    Field = field,
                     ProcessParameter = () =>
                     {
                         missingMandatories.Remove(field);
@@ -465,8 +473,13 @@ public static class CommandLineParser
             }
             else
                 // This only happens if the post-build check didn't run
-                throw new InternalErrorException($"{type.FullName}.{field.Name} is not of a supported type.");
+                throw new UnsupportedTypeException($"{type.Name}.{field.Name}", getHelpGenerator(type, helpProcessor));
         }
+
+        positionals = positionals.OrderBy(p => p.Order).ToList(); // Don’t use List<T>.Sort because it’s not a stable sort
+        for (var pIx = 0; pIx < positionals.Count - 1; pIx++)
+            if (positionals[pIx + 1].IsMandatory && !positionals[pIx].IsMandatory)
+                throw new InvalidOrderOfPositionalParametersException(positionals[pIx].Field, positionals[pIx + 1].Field, getHelpGenerator(type, helpProcessor));
 
         bool suppressOptions = false;
 
@@ -500,16 +513,17 @@ public static class CommandLineParser
 
         if (ret is ICommandLineValidatable v)
         {
+            ConsoleColoredString error = null;
             try
             {
-                var error = v.Validate();
-                if (error != null)
-                    throw new CommandLineValidationException(error, getHelpGenerator(type, helpProcessor));
+                error = v.Validate();
             }
             catch (CommandLineValidationException exc) when (exc.GenerateHelpFunc == null)
             {
-                throw new CommandLineValidationException(exc.ColoredMessage, getHelpGenerator(type, helpProcessor));
+                error = exc.ColoredMessage;
             }
+            if (error != null)
+                throw new CommandLineValidationException(error, getHelpGenerator(type, helpProcessor));
         }
 
         return ret;
@@ -747,13 +761,19 @@ public static class CommandLineParser
         optionalPositional = [];
         mandatoryPositional = [];
 
-        foreach (var field in type.GetCommandLineFields().Where(f => !f.IsDefined<UndocumentedAttribute>()))
+        foreach (var field in type.GetCommandLineFields())
         {
+            if (field.IsDefined<UndocumentedAttribute>())
+                continue;
             var fieldInfos = field.IsDefined<IsMandatoryAttribute>()
                 ? (field.IsDefined<IsPositionalAttribute>() ? mandatoryPositional : mandatoryOptions)
                 : (field.IsDefined<IsPositionalAttribute>() ? optionalPositional : optionalOptions);
             fieldInfos.Add(field);
         }
+
+        // Don’t use List<T>.Sort because it’s not a stable sort
+        mandatoryPositional = mandatoryPositional.OrderBy(f => f.GetCustomAttribute<IsPositionalAttribute>().Order).ToList();
+        optionalPositional = optionalPositional.OrderBy(f => f.GetCustomAttribute<IsPositionalAttribute>().Order).ToList();
     }
 
     private static ConsoleColoredString getDocumentation(MemberInfo member, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor) =>
