@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using RT.Util;
 using RT.Util.Consoles;
 using RT.Util.ExtensionMethods;
@@ -86,20 +86,18 @@ public sealed class CommandLineHelpRequestedException(Func<int, ConsoleColoredSt
 ///     Specifies that the command-line parser encountered a command or option that was not recognised (there was no <see
 ///     cref="OptionAttribute"/> or <see cref="CommandNameAttribute"/> attribute with a matching option or command name).</summary>
 [Serializable]
-public sealed class UnrecognizedCommandOrOptionException(string commandOrOptionName, Func<int, ConsoleColoredString> helpGenerator, Exception inner)
+public sealed class UnrecognizedCommandOrOptionException(string commandOrOptionName, Func<int, ConsoleColoredString> helpGenerator, Exception inner = null)
     : CommandLineParseException("The specified command or option, {0}, is not recognized.".ToConsoleColoredString().Fmt(commandOrOptionName.Color(ConsoleColor.White)), helpGenerator, inner)
 {
     /// <summary>The unrecognized command name or option name.</summary>
     public string CommandOrOptionName { get; private set; } = commandOrOptionName;
-    /// <summary>Constructor.</summary>
-    public UnrecognizedCommandOrOptionException(string commandOrOptionName, Func<int, ConsoleColoredString> helpGenerator) : this(commandOrOptionName, helpGenerator, null) { }
 }
 
 /// <summary>
 ///     Specifies that the command-line parser encountered a command or option that is not allowed in conjunction with a
 ///     previously-encountered command or option.</summary>
 [Serializable]
-public sealed class IncompatibleCommandOrOptionException(string earlier, string later, Func<int, ConsoleColoredString> helpGenerator, Exception inner)
+public sealed class IncompatibleCommandOrOptionException(string earlier, string later, Func<int, ConsoleColoredString> helpGenerator, Exception inner = null)
     : CommandLineParseException("The command or option, {0}, cannot be used in conjunction with {1}. Please specify only one of the two.".ToConsoleColoredString().Fmt(later.Color(ConsoleColor.White), earlier.Color(ConsoleColor.White)), helpGenerator, inner)
 {
     /// <summary>
@@ -108,15 +106,13 @@ public sealed class IncompatibleCommandOrOptionException(string earlier, string 
     public string EarlierCommandOrOption { get; private set; } = earlier;
     /// <summary>The later option or command, which conflicts with the <see cref="EarlierCommandOrOption"/>.</summary>
     public string LaterCommandOrOption { get; private set; } = later;
-    /// <summary>Constructor.</summary>
-    public IncompatibleCommandOrOptionException(string earlier, string later, Func<int, ConsoleColoredString> helpGenerator) : this(earlier, later, helpGenerator, null) { }
 }
 
 /// <summary>
 ///     Specifies that the command-line parser encountered the end of the command line when it expected additional mandatory
 ///     options.</summary>
 [Serializable]
-public sealed class MissingParameterException(FieldInfo paramField, FieldInfo beforeField, bool isOption, Func<int, ConsoleColoredString> helpGenerator, Exception inner)
+public sealed class MissingParameterException(FieldInfo paramField, FieldInfo beforeField, bool isOption, Func<int, ConsoleColoredString> helpGenerator, Exception inner = null)
     : CommandLineParseException(getMessage(paramField, beforeField, isOption), helpGenerator, inner)
 {
     /// <summary>Contains the field pertaining to the parameter that was missing.</summary>
@@ -128,9 +124,6 @@ public sealed class MissingParameterException(FieldInfo paramField, FieldInfo be
     /// <summary>
     ///     Specifies whether the missing parameter was a missing option (true) or a missing positional parameter (false).</summary>
     public bool IsOption { get; private set; } = isOption;
-
-    /// <summary>Constructor.</summary>
-    public MissingParameterException(FieldInfo paramField, FieldInfo beforeField, bool isOption, Func<int, ConsoleColoredString> helpGenerator) : this(paramField, beforeField, isOption, helpGenerator, null) { }
 
     private static ConsoleColoredString getMessage(FieldInfo field, FieldInfo beforeField, bool isOption)
     {
@@ -147,39 +140,33 @@ public sealed class MissingParameterException(FieldInfo paramField, FieldInfo be
 ///     Specifies that the command-line parser encountered additional command-line arguments when it expected the end of the
 ///     command line.</summary>
 [Serializable]
-public sealed class UnexpectedArgumentException(string[] unexpectedArgs, Func<int, ConsoleColoredString> helpGenerator, Exception inner)
+public sealed class UnexpectedArgumentException(string[] unexpectedArgs, Func<int, ConsoleColoredString> helpGenerator, Exception inner = null)
     : CommandLineParseException("Unexpected parameter: {0}".ToConsoleColoredString().Fmt(unexpectedArgs.Select(prm => prm.Length > 50 ? $"{prm.Substring(0, 47)}..." : prm).FirstOrDefault().Color(CmdLineColor.UnexpectedArgument)), helpGenerator, inner)
 {
     /// <summary>Contains the first unexpected argument and all of the subsequent arguments.</summary>
     public string[] UnexpectedParameters { get; private set; } = unexpectedArgs;
-    /// <summary>Constructor.</summary>
-    public UnexpectedArgumentException(string[] unexpectedArgs, Func<int, ConsoleColoredString> helpGenerator) : this(unexpectedArgs, helpGenerator, null) { }
 }
 
 /// <summary>
 ///     Specifies that the command-line parser encountered the end of the command line when it expected an argument to an
 ///     option.</summary>
 [Serializable]
-public sealed class IncompleteOptionException(string optionName, Func<int, ConsoleColoredString> helpGenerator, Exception inner)
+public sealed class IncompleteOptionException(string optionName, Func<int, ConsoleColoredString> helpGenerator, Exception inner = null)
     : CommandLineParseException("The {0} option must be followed by an additional parameter.".ToConsoleColoredString().Fmt(optionName.Color(ConsoleColor.White)), helpGenerator, inner)
 {
     /// <summary>The name of the option that was missing an argument.</summary>
     public string OptionName { get; private set; } = optionName;
-    /// <summary>Constructor.</summary>
-    public IncompleteOptionException(string optionName, Func<int, ConsoleColoredString> helpGenerator) : this(optionName, helpGenerator, null) { }
 }
 
 /// <summary>
 ///     Specifies that a parameter that expected a numerical value was passed a string by the user that doesn’t parse as a
 ///     number.</summary>
 [Serializable]
-public sealed class InvalidNumericParameterException(string fieldName, Func<int, ConsoleColoredString> helpGenerator, Exception inner)
+public sealed class InvalidNumericParameterException(string fieldName, Func<int, ConsoleColoredString> helpGenerator, Exception inner = null)
     : CommandLineParseException("The {0} option expects a number. The specified parameter does not constitute a valid number.".ToConsoleColoredString().Fmt("<".Color(CmdLineColor.FieldBrackets) + fieldName.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets)), helpGenerator, inner)
 {
     /// <summary>Contains the name of the field pertaining to the parameter that was passed an invalid value.</summary>
     public string FieldName { get; private set; } = fieldName;
-    /// <summary>Constructor.</summary>
-    public InvalidNumericParameterException(string fieldName, Func<int, ConsoleColoredString> helpGenerator) : this(fieldName, helpGenerator, null) { }
 }
 
 /// <summary>Indicates that the arguments specified by the user on the command-line do not pass the custom validation check.</summary>
