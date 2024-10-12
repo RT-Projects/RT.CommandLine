@@ -71,5 +71,6 @@ static class CmdLineExtensions
     public static IEnumerable<FieldInfo> GetCommandLineFields(this Type type) =>
         type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
             .Where(f => f.IsDefined<OptionAttribute>() || f.IsDefined<EnumOptionsAttribute>() || f.IsDefined<IsPositionalAttribute>())
-            .OrderBy(f => f.DeclaringType.SelectChain(t => t.BaseType).Count());
+            .OrderBy(f => f.GetCustomAttribute<IsPositionalAttribute>()?.Order)
+            .ThenBy(f => f.DeclaringType.SelectChain(t => t.BaseType).Count());
 }

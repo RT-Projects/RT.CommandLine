@@ -476,7 +476,6 @@ public static class CommandLineParser
                 throw new UnsupportedTypeException($"{type.Name}.{field.Name}", getHelpGenerator(type, helpProcessor));
         }
 
-        positionals = positionals.OrderBy(p => p.Order).ToList(); // Don’t use List<T>.Sort because it’s not a stable sort
         for (var pIx = 0; pIx < positionals.Count - 1; pIx++)
             if (positionals[pIx + 1].IsMandatory && !positionals[pIx].IsMandatory)
                 throw new InvalidOrderOfPositionalParametersException(positionals[pIx].Field, positionals[pIx + 1].Field, getHelpGenerator(type, helpProcessor));
@@ -770,10 +769,6 @@ public static class CommandLineParser
                 : (field.IsDefined<IsPositionalAttribute>() ? optionalPositional : optionalOptions);
             fieldInfos.Add(field);
         }
-
-        // Don’t use List<T>.Sort because it’s not a stable sort
-        mandatoryPositional = mandatoryPositional.OrderBy(f => f.GetCustomAttribute<IsPositionalAttribute>().Order).ToList();
-        optionalPositional = optionalPositional.OrderBy(f => f.GetCustomAttribute<IsPositionalAttribute>().Order).ToList();
     }
 
     private static ConsoleColoredString getDocumentation(MemberInfo member, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor) =>
