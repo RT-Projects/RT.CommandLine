@@ -148,6 +148,7 @@ public sealed class CmdLineTests
         CommandLineParser.PostBuildStep<Test1Cmd>(reporter);
         CommandLineParser.PostBuildStep<Test2Cmd>(reporter);
         CommandLineParser.PostBuildStep<Test3Cmd>(reporter);
+        CommandLineParser.PostBuildStep<Test5Cmd3>(reporter);
     }
 
     [Fact]
