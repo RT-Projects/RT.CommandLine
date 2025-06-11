@@ -12,17 +12,22 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <IncludeSymbols>true</IncludeSymbols>
+    <Configurations>Debug (Nuget);Debug (local libs);Release</Configurations>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="RT.PostBuild" Version="2.0.1776" />
-    <PackageReference Include="RT.Util.Core" Version="2.0.1776" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'Debug (local libs)'">
+    <ProjectReference Include="..\..\RT.Util\RT.Util.Core\RT.Util.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)' != 'Debug (local libs)'">
+    <PackageReference Include="RT.Util.Core" Version="2.0.1777" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Include="..\External\RT.Util\RT.Serialization\ExactConvert.cs" Link="RT.Util\ExactConvert.cs" />
     <Compile Include="..\External\RT.Util\RT.Util.Core\ExtensionMethods\DateTimeExtensions.cs" Link="RT.Util\DateTimeExtensions.cs" />
   </ItemGroup>
-
 </Project>
