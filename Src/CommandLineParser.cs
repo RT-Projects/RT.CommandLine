@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Reflection;
 using RT.Internal;
 using RT.PostBuild;
@@ -116,23 +116,19 @@ namespace RT.CommandLine;
 ///                 the values in the enum type must also have documentation or <see cref="UndocumentedAttribute"/>, except
 ///                 for the enum value that corresponds to the field’s default value if the field is not mandatory.</para>
 ///             <para>
-///                 Documentation is provided in one of the following ways:</para>
+///                 Documentation can be provided in one of the following ways:</para>
 ///             <list type="bullet">
 ///                 <item><description>
-///                     Monolingual, translation-agnostic (unlocalisable) applications use the <see
-///                     cref="DocumentationAttribute"/> to specify documentation directly.</description></item>
+///                     Use <see cref="DocumentationAttribute"/> to specify unformatted text directly.</description></item>
 ///                 <item><description>
-///                     <para>
-///                         Translatable applications must declare methods with the following signature:</para>
-///                     <code>
-///                         static string FieldNameDoc(Translation)</code>
-///                     <para>
-///                         The first parameter must be of the same type as the object passed in for the <c>applicationTr</c>
-///                         parameter of <see cref="Parse"/>. The name of the method is the name of the field or enum value
-///                         followed by <c>Doc</c>. The return value is the translated string.</para></description></item></list></description></item>
+///                     Use <see cref="DocumentationEggsMLAttribute"/> or <see cref="DocumentationRhoMLAttribute"/> to format
+///                     your text with coloration using one of the two markup systems.</description></item></list></description></item>
 ///         <item><description>
 ///             <see cref="IsPositionalAttribute"/> and <see cref="IsMandatoryAttribute"/> can be used together. However, a
-///             positional field can only be made mandatory if all the positional fields preceding it are also mandatory.</description></item></list></remarks>
+///             positional field can only be made mandatory if all the positional fields preceding it are also mandatory.</description></item></list>
+///     <para>
+///         <see cref="SectionAttribute"/> can be used to split the help screen into sections with headers for better
+///         readability.</para></remarks>
 public static class CommandLineParser
 {
     /// <summary>
@@ -589,21 +585,6 @@ public static class CommandLineParser
             }
             helpString.Add(ConsoleColoredString.NewLine);
 
-            //
-            //  ##  CONSTRUCT THE TABLES
-            //
-
-            var anyCommandsWithSuboptions = false;
-            var requiredParamsTable = new TextTable { MaxWidth = wrapWidth - leftMargin, ColumnSpacing = 3, RowSpacing = 1, LeftMargin = leftMargin };
-            int requiredRow = 0;
-            foreach (var f in mandatoryPositional.Select(fld => new { Positional = true, Field = fld }).Concat(mandatoryOptions.Select(fld => new { Positional = false, Field = fld })))
-                anyCommandsWithSuboptions |= createParameterHelpRow(ref requiredRow, requiredParamsTable, f.Field, f.Positional, helpProcessor);
-
-            var optionalParamsTable = new TextTable { MaxWidth = wrapWidth - leftMargin, ColumnSpacing = 3, RowSpacing = 1, LeftMargin = leftMargin };
-            int optionalRow = 0;
-            foreach (var f in optionalPositional.Select(fld => new { Positional = true, Field = fld }).Concat(optionalOptions.Select(fld => new { Positional = false, Field = fld })))
-                anyCommandsWithSuboptions |= createParameterHelpRow(ref optionalRow, optionalParamsTable, f.Field, f.Positional, helpProcessor);
-
             // Word-wrap the documentation for the command (if any)
             var doc = getDocumentation(type, helpProcessor);
             foreach (var line in doc.WordWrap(wrapWidth))
@@ -612,26 +593,40 @@ public static class CommandLineParser
                 helpString.Add(ConsoleColoredString.NewLine);
             }
 
-            // Table of required parameters
-            if (mandatoryOptions.Count > 0 || mandatoryPositional.Count > 0)
+
+            //
+            //  ##  CONSTRUCT THE TABLES
+            //
+
+            var anyCommandsWithSuboptions = false;
+            var paramsTables = new List<(string heading, TextTable table)>();
+            TextTable curTable = null;
+            var curRow = 0;
+            var lastMandatory = false;
+            foreach (var (mandatory, positional, field) in mandatoryPositional.Select(fld => (mandatory: true, positional: true, field: fld))
+                .Concat(mandatoryOptions.Select(fld => (mandatory: true, positional: false, field: fld)))
+                .Concat(optionalPositional.Select(fld => (mandatory: false, positional: true, field: fld)))
+                .Concat(optionalOptions.Select(fld => (mandatory: false, positional: false, field: fld))))
             {
-                helpString.Add(ConsoleColoredString.NewLine);
-                helpString.Add(new ConsoleColoredString("Required parameters:", CmdLineColor.HelpHeading));
-                helpString.Add(ConsoleColoredString.NewLine);
-                helpString.Add(ConsoleColoredString.NewLine);
-                requiredParamsTable.RemoveEmptyColumns();
-                helpString.Add(requiredParamsTable.ToColoredString());
+                var section = field.GetCustomAttribute<SectionAttribute>();
+                if (curTable == null || lastMandatory != mandatory || section != null)
+                {
+                    curTable = new TextTable { MaxWidth = wrapWidth - leftMargin, ColumnSpacing = 3, RowSpacing = 1, LeftMargin = leftMargin };
+                    paramsTables.Add((section?.Heading ?? $"{(mandatory ? "Required" : "Optional")} parameters:", curTable));
+                    curRow = 0;
+                }
+                anyCommandsWithSuboptions |= createParameterHelpRow(ref curRow, curTable, field, positional, helpProcessor);
+                lastMandatory = mandatory;
             }
 
-            // Table of optional parameters
-            if (optionalOptions.Count > 0 || optionalPositional.Count > 0)
+            foreach (var (heading, table) in paramsTables)
             {
                 helpString.Add(ConsoleColoredString.NewLine);
-                helpString.Add(new ConsoleColoredString("Optional parameters:", CmdLineColor.HelpHeading));
+                helpString.Add(new ConsoleColoredString(heading, CmdLineColor.HelpHeading));
                 helpString.Add(ConsoleColoredString.NewLine);
                 helpString.Add(ConsoleColoredString.NewLine);
-                optionalParamsTable.RemoveEmptyColumns();
-                helpString.Add(optionalParamsTable.ToColoredString());
+                table.RemoveEmptyColumns();
+                helpString.Add(table.ToColoredString());
             }
 
             // “This command accepts further arguments on the command line.”

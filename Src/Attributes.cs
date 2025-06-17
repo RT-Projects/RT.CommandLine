@@ -1,4 +1,4 @@
-using RT.Util;
+﻿using RT.Util;
 using RT.Util.Consoles;
 
 namespace RT.CommandLine;
@@ -102,7 +102,7 @@ public class DocumentationLiteralAttribute(string documentation) : Documentation
 public class DocumentationEggsMLAttribute(string documentation) : DocumentationAttribute(documentation)
 {
     /// <summary>Gets a string describing the documentation format to the programmer (not seen by the users).</summary>
-    public override string OriginalFormat { get { return "EggsML"; } }
+    public override string OriginalFormat => "EggsML";
     /// <summary>
     ///     Gets the console-colored documentation string. Note that this property may throw if the text couldn't be parsed
     ///     where applicable.</summary>
@@ -119,7 +119,7 @@ public class DocumentationEggsMLAttribute(string documentation) : DocumentationA
 public class DocumentationRhoMLAttribute(string documentation) : DocumentationAttribute(documentation)
 {
     /// <summary>Gets a string describing the documentation format to the programmer (not seen by the users).</summary>
-    public override string OriginalFormat { get { return "RhoML"; } }
+    public override string OriginalFormat => "RhoML";
     /// <summary>
     ///     Gets the console-colored documentation string. Note that this property may throw if the text couldn't be parsed
     ///     where applicable.</summary>
@@ -131,8 +131,14 @@ public class DocumentationRhoMLAttribute(string documentation) : DocumentationAt
 ///     Specifies that a specific command-line option should not be printed in help pages, i.e. the option should explicitly
 ///     be undocumented.</summary>
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Class, Inherited = false, AllowMultiple = true)]
-public sealed class UndocumentedAttribute : Attribute
+public sealed class UndocumentedAttribute() : Attribute
 {
-    /// <summary>Constructor.</summary>
-    public UndocumentedAttribute() { }
+}
+
+/// <summary>Adds a section header on the help screen above the option or parameter that has this attribute.</summary>
+[AttributeUsage(AttributeTargets.Field, Inherited = false, AllowMultiple = true)]
+public sealed class SectionAttribute(string heading) : Attribute
+{
+    /// <summary>Specifies the section heading.</summary>
+    public string Heading { get; private set; } = heading;
 }
