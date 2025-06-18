@@ -12,17 +12,17 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <IncludeSymbols>true</IncludeSymbols>
-    <Configurations>Debug (Nuget);Debug (local libs);Release</Configurations>
+    <Configurations>Debug-Nuget;Debug-locallibs;Release</Configurations>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="RT.PostBuild" Version="2.0.1776" />
   </ItemGroup>
-  <ItemGroup Condition="'$(Configuration)' == 'Debug (local libs)'">
+  <ItemGroup Condition="'$(Configuration)' == 'Debug-locallibs'">
     <ProjectReference Include="..\..\RT.Util\RT.Util.Core\RT.Util.Core.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(Configuration)' != 'Debug (local libs)'">
+  <ItemGroup Condition="'$(Configuration)' != 'Debug-locallibs'">
     <PackageReference Include="RT.Util.Core" Version="2.0.1777" />
   </ItemGroup>
 
