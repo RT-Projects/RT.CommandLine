@@ -32,6 +32,9 @@ jobs:
             core.exportVariable('VER_NUM', vs.formatVersion(`${majmin}.$(GitRevCount)`));
             core.exportVariable('VER_SUF', ver_suf);
 
+      - name: Clone RT.Util
+        run: git clone https://github.com/RT-Projects/RT.Util.git ../RT.Util
+
       - name: Install dotnet
         uses: actions/setup-dotnet@v4
         with:
