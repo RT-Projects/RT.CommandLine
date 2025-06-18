@@ -25,9 +25,4 @@
   <ItemGroup Condition="'$(Configuration)' != 'Debug-locallibs'">
     <PackageReference Include="RT.Util.Core" Version="2.0.1777" />
   </ItemGroup>
-
-  <ItemGroup>
-    <Compile Include="..\External\RT.Util\RT.Serialization\ExactConvert.cs" Link="RT.Util\ExactConvert.cs" />
-    <Compile Include="..\External\RT.Util\RT.Util.Core\ExtensionMethods\DateTimeExtensions.cs" Link="RT.Util\DateTimeExtensions.cs" />
-  </ItemGroup>
 </Project>

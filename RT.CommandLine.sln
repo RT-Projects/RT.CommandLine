@@ -6,8 +6,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RT.CommandLine", "Src\RT.Co
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RT.CommandLine.Tests", "Tests\RT.CommandLine.Tests.csproj", "{294D2B02-3FA6-4B9A-82BF-F80396943892}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RT.Util.Core", "..\RT.Util\RT.Util.Core\RT.Util.Core.csproj", "{45112116-A549-97E2-5AB1-8CDC7AE4B250}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug-locallibs|Any CPU = Debug-locallibs|Any CPU
@@ -27,12 +25,6 @@ Global
 		{294D2B02-3FA6-4B9A-82BF-F80396943892}.Debug-Nuget|Any CPU.Build.0 = Debug|Any CPU
 		{294D2B02-3FA6-4B9A-82BF-F80396943892}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{294D2B02-3FA6-4B9A-82BF-F80396943892}.Release|Any CPU.Build.0 = Release|Any CPU
-		{45112116-A549-97E2-5AB1-8CDC7AE4B250}.Debug-locallibs|Any CPU.ActiveCfg = Debug|Any CPU
-		{45112116-A549-97E2-5AB1-8CDC7AE4B250}.Debug-locallibs|Any CPU.Build.0 = Debug|Any CPU
-		{45112116-A549-97E2-5AB1-8CDC7AE4B250}.Debug-Nuget|Any CPU.ActiveCfg = Debug|Any CPU
-		{45112116-A549-97E2-5AB1-8CDC7AE4B250}.Debug-Nuget|Any CPU.Build.0 = Debug|Any CPU
-		{45112116-A549-97E2-5AB1-8CDC7AE4B250}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{45112116-A549-97E2-5AB1-8CDC7AE4B250}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

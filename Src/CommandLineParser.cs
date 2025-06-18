@@ -1,4 +1,5 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
+using System.Numerics;
 using System.Reflection;
 using RT.Internal;
 using RT.PostBuild;
@@ -203,6 +204,10 @@ public static class CommandLineParser
         return getHelpGenerator(subType ?? typeof(TArgs), helpProcessor)(wrapWidth ?? ConsoleUtil.WrapToWidth());
     }
 
+    private static bool isIntegerType(Type type) => Type.GetTypeCode(type) is TypeCode.Byte or TypeCode.SByte or TypeCode.Int16 or TypeCode.Int32 or TypeCode.Int64 or TypeCode.UInt16 or TypeCode.UInt32 or TypeCode.UInt64 or TypeCode.Boolean or TypeCode.Char or TypeCode.DateTime;
+    private static bool isTrueIntegerType(Type type) => Type.GetTypeCode(type) is TypeCode.Byte or TypeCode.SByte or TypeCode.Int16 or TypeCode.Int32 or TypeCode.Int64 or TypeCode.UInt16 or TypeCode.UInt32 or TypeCode.UInt64;
+    private static bool isTrueIntegerNullableType(Type type) => type.IsConstructedGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>) && isTrueIntegerType(type.GetGenericArguments()[0]);
+
     private static object parseCommandLine(string[] args, Type type, int i, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor)
     {
         if (i < args.Length)
@@ -346,7 +351,7 @@ public static class CommandLineParser
                     options[o] = () => { field.SetValue(ret, true); i++; missingMandatories.Remove(field); };
             }
             // ### STRING and INTEGER fields (including nullable)
-            else if (field.FieldType == typeof(string) || ExactConvert.IsTrueIntegerType(field.FieldType) || ExactConvert.IsTrueIntegerNullableType(field.FieldType) ||
+            else if (field.FieldType == typeof(string) || isTrueIntegerType(field.FieldType) || isTrueIntegerNullableType(field.FieldType) ||
                 field.FieldType == typeof(float) || field.FieldType == typeof(float?) || field.FieldType == typeof(double) || field.FieldType == typeof(double?))
             {
                 if (positional is double order)
@@ -526,6 +531,41 @@ public static class CommandLineParser
 
     private static IEnumerable<Type> allTypes() => AppDomain.CurrentDomain.GetAssemblies().SelectMany(asm => asm.GetTypes());
 
+    private static bool tryConvert(Type toType, string value, out object result)
+    {
+        if (toType.IsEnum)
+        {
+            object[] parameters = [value, null];
+            var succeeded = (bool) typeof(Enum).GetMethods(BindingFlags.Static | BindingFlags.Public).First(m => m.Name == "TryParse" && m.GetParameters().Length == 2).MakeGenericMethod(toType).Invoke(null, parameters);
+            result = parameters[1];
+            return succeeded;
+        }
+
+        bool success = false;
+        object converted = null;
+        switch (Type.GetTypeCode(toType))
+        {
+            case TypeCode.Boolean: { success = bool.TryParse(value, out bool temp); converted = temp; break; }
+            case TypeCode.Byte: { success = byte.TryParse(value, out byte temp); converted = temp; break; }
+            case TypeCode.SByte: { success = sbyte.TryParse(value, out sbyte temp); converted = temp; break; }
+            case TypeCode.Int16: { success = short.TryParse(value, out short temp); converted = temp; break; }
+            case TypeCode.UInt16: { success = ushort.TryParse(value, out ushort temp); converted = temp; break; }
+            case TypeCode.Int32: { success = int.TryParse(value, out int temp); converted = temp; break; }
+            case TypeCode.UInt32: { success = uint.TryParse(value, out uint temp); converted = temp; break; }
+            case TypeCode.Int64: { success = long.TryParse(value, out long temp); converted = temp; break; }
+            case TypeCode.UInt64: { success = ulong.TryParse(value, out ulong temp); converted = temp; break; }
+            case TypeCode.Single: { success = float.TryParse(value, out float temp); converted = temp; break; }
+            case TypeCode.Double: { success = double.TryParse(value, out double temp); converted = temp; break; }
+            case TypeCode.Decimal: { success = decimal.TryParse(value, out decimal temp); converted = temp; break; }
+            case TypeCode.DateTime: { success = DateTime.TryParse(value, out DateTime temp); converted = temp; break; }
+            case TypeCode.Char: { success = char.TryParse(value, out char temp); converted = temp; break; }
+            case TypeCode.String: { converted = value; success = true; break; }
+            case TypeCode.Object when toType == typeof(BigInteger): { success = BigInteger.TryParse(value, out BigInteger temp); converted = temp; break; }
+        }
+        result = success ? converted : null;
+        return success;
+    }
+
     private static bool convertStringAndSetField(string value, object cmdLineObject, FieldInfo field)
     {
         object result;
@@ -534,10 +574,10 @@ public static class CommandLineParser
             result = value;
         else
         {
-            Type type = field.FieldType.IsGenericType && field.FieldType.GetGenericTypeDefinition() == typeof(Nullable<>)
+            Type type = field.FieldType.IsConstructedGenericType && field.FieldType.GetGenericTypeDefinition() == typeof(Nullable<>)
                 ? field.FieldType.GetGenericArguments()[0]
                 : field.FieldType;
-            if (!ExactConvert.Try(type, value, out result))
+            if (!tryConvert(type, value, out result))
                 return false;
         }
         field.SetValue(cmdLineObject, result);
@@ -908,8 +948,8 @@ public static class CommandLineParser
             }
             // ### STRING, STRING[], INTEGER and FLOATING fields (including nullable)
             else if (field.FieldType == typeof(string) || field.FieldType == typeof(string[]) ||
-                (ExactConvert.IsTrueIntegerType(field.FieldType) && !field.FieldType.IsEnum) ||
-                (ExactConvert.IsTrueIntegerNullableType(field.FieldType) && !field.FieldType.GetGenericArguments()[0].IsEnum) ||
+                (isTrueIntegerType(field.FieldType) && !field.FieldType.IsEnum) ||
+                (isTrueIntegerNullableType(field.FieldType) && !field.FieldType.GetGenericArguments()[0].IsEnum) ||
                 field.FieldType == typeof(float) || field.FieldType == typeof(float?) || field.FieldType == typeof(double) || field.FieldType == typeof(double?))
             {
                 // options is null if and only if this field is positional
