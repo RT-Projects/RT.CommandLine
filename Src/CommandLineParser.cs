@@ -624,12 +624,18 @@ public static class CommandLineParser
             }
             helpString.Add(ConsoleColoredString.NewLine);
 
-            // Word-wrap the documentation for the command (if any)
+            // Output the documentation for the command (if any)
             var doc = getDocumentation(type, helpProcessor);
-            foreach (var line in doc.WordWrap(wrapWidth))
+            if (doc.Any(d => d.Length > 0))
             {
-                helpString.Add(line);
-                helpString.Add(ConsoleColoredString.NewLine);
+                var docTable = new TextTable { MaxWidth = wrapWidth, ColumnSpacing = fmtOpt.ColumnSpacing, RowSpacing = fmtOpt.RowSpacing, StretchLastCell = true };
+                foreach (var row in doc)
+                {
+                    for (var x = 0; x < row.Length; x++)
+                        docTable.AddCell(row[x]);
+                    docTable.FinishRow();
+                }
+                helpString.Add(docTable.ToColoredString());
             }
 
 
@@ -650,7 +656,7 @@ public static class CommandLineParser
                 var section = field.GetCustomAttribute<SectionAttribute>();
                 if (curTable == null || lastMandatory != mandatory || section != null)
                 {
-                    curTable = new TextTable { MaxWidth = wrapWidth - fmtOpt.LeftMargin, ColumnSpacing = fmtOpt.ColumnSpacing, RowSpacing = fmtOpt.RowSpacing, LeftMargin = fmtOpt.LeftMargin };
+                    curTable = new TextTable { MaxWidth = wrapWidth - fmtOpt.LeftMargin, ColumnSpacing = fmtOpt.ColumnSpacing, RowSpacing = fmtOpt.RowSpacing, LeftMargin = fmtOpt.LeftMargin, StretchLastCell = true };
                     paramsTables.Add((section?.Heading ?? $"{(mandatory ? "Required" : "Optional")} parameters:", curTable));
                     curRow = 0;
                 }
@@ -689,6 +695,14 @@ public static class CommandLineParser
         var anyCommandsWithSuboptions = false;
         var cmdName = "<".Color(CmdLineColor.FieldBrackets) + field.Name.Color(CmdLineColor.Field) + ">".Color(CmdLineColor.FieldBrackets);
 
+        int plonkDocumentation(int startCol, int startRow, ConsoleColoredString[][] docs, bool min1)
+        {
+            for (var r = 0; r < docs.Length; r++)
+                for (var c = 0; c < docs[r].Length; c++)
+                    table.SetCell(startCol + c, startRow + r, docs[r][c]);
+            return Math.Max(docs.Length, min1 ? 1 : 0);
+        }
+
         if (field.FieldType.IsEnum)
         {
             // ### ENUM fields, positional
@@ -696,11 +710,7 @@ public static class CommandLineParser
             {
                 var topRow = row;
                 var doc = getDocumentation(field, helpProcessor);
-                if (doc.Length > 0 || field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public).All(el => el.IsDefined<UndocumentedAttribute>() || !el.GetCustomAttributes<CommandNameAttribute>().Any()))
-                {
-                    table.SetCell(2, row, doc, colSpan: 4);
-                    row++;
-                }
+                row += plonkDocumentation(2, row, doc, min1: false);
                 foreach (var el in field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public))
                 {
                     if (el.IsDefined<UndocumentedAttribute>())
@@ -710,16 +720,17 @@ public static class CommandLineParser
                         continue;
                     table.SetCell(2, row, attr.Names.Where(n => n.Length <= 2).Select(s => s.Color(CmdLineColor.EnumValue)).JoinColoredString(", "), noWrap: true);
                     table.SetCell(3, row, attr.Names.Where(n => n.Length > 2).Select(s => s.Color(CmdLineColor.EnumValue)).JoinColoredString(Environment.NewLine), noWrap: true);
-                    table.SetCell(4, row, getDocumentation(el, helpProcessor), colSpan: 2);
-                    row++;
+                    row += plonkDocumentation(4, row, getDocumentation(el, helpProcessor), min1: true);
                 }
+                if (row == topRow)
+                    row++;
                 table.SetCell(0, topRow, cmdName, noWrap: true, colSpan: 2, rowSpan: row - topRow);
             }
             // ### ENUM fields, “-x foo” scheme
             else if (field.IsDefined<OptionAttribute>())
             {
                 var topRow = row;
-                row++;
+                row += plonkDocumentation(2, row, getDocumentation(field, helpProcessor), min1: false);
                 foreach (var el in field.FieldType.GetFields(BindingFlags.Static | BindingFlags.Public).Where(e => !e.IsDefined<UndocumentedAttribute>()))
                 {
                     var attr = el.GetCustomAttributes<CommandNameAttribute>().FirstOrDefault();
@@ -727,15 +738,13 @@ public static class CommandLineParser
                         continue;
                     table.SetCell(3, row, attr.Names.Where(n => n.Length <= 2).Select(s => s.Color(CmdLineColor.EnumValue)).JoinColoredString(", "), noWrap: true);
                     table.SetCell(4, row, attr.Names.Where(n => n.Length > 2).Select(s => s.Color(CmdLineColor.EnumValue)).JoinColoredString(Environment.NewLine), noWrap: true);
-                    table.SetCell(5, row, getDocumentation(el, helpProcessor));
-                    row++;
+                    row += plonkDocumentation(5, row, getDocumentation(el, helpProcessor), min1: true);
                 }
-                if (row == topRow + 1)
-                    throw new InvalidOperationException($"Enum type {field.FieldType.DeclaringType.FullName}.{field.FieldType} has no values (apart from default value for field {field.DeclaringType.FullName}.{field.Name}).");
+                if (row == topRow)
+                    row++;
                 table.SetCell(0, topRow, field.GetOrderedOptionAttributeNames().Where(o => !o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(", "), noWrap: true, rowSpan: row - topRow);
                 table.SetCell(1, topRow, field.GetOrderedOptionAttributeNames().Where(o => o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(Environment.NewLine), noWrap: true, rowSpan: row - topRow);
-                table.SetCell(2, topRow, getDocumentation(field, helpProcessor), colSpan: 4);
-                table.SetCell(2, topRow + 1, cmdName, noWrap: true, rowSpan: row - topRow - 1);
+                table.SetCell(2, topRow, cmdName, noWrap: true, rowSpan: row - topRow - 1);
             }
             // ### ENUM fields, “-x” scheme
             else
@@ -744,8 +753,7 @@ public static class CommandLineParser
                 {
                     table.SetCell(0, row, el.GetOrderedOptionAttributeNames().Where(o => !o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(", "), noWrap: true);
                     table.SetCell(1, row, el.GetOrderedOptionAttributeNames().Where(o => o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(Environment.NewLine), noWrap: true);
-                    table.SetCell(2, row, getDocumentation(el, helpProcessor), colSpan: 4);
-                    row++;
+                    row += plonkDocumentation(2, row, getDocumentation(el, helpProcessor), min1: true);
                 }
             }
         }
@@ -765,8 +773,7 @@ public static class CommandLineParser
                 var names = ty.GetCustomAttributes<CommandNameAttribute>().First().Names;
                 table.SetCell(2, row, names.Where(n => n.Length <= 2).Select(n => n.Color(CmdLineColor.Command) + asterisk).JoinColoredString(", "), noWrap: true);
                 table.SetCell(3, row, names.Where(n => n.Length > 2).Select(n => n.Color(CmdLineColor.Command) + asterisk).JoinColoredString(Environment.NewLine), noWrap: true);
-                table.SetCell(4, row, getDocumentation(ty, helpProcessor), colSpan: 2);
-                row++;
+                row += plonkDocumentation(4, row, getDocumentation(ty, helpProcessor), min1: true);
             }
             table.SetCell(0, origRow, cmdName, colSpan: 2, rowSpan: row - origRow, noWrap: true);
         }
@@ -774,16 +781,14 @@ public static class CommandLineParser
         else if (positional)
         {
             table.SetCell(0, row, cmdName, noWrap: true, colSpan: 2);
-            table.SetCell(2, row, getDocumentation(field, helpProcessor), colSpan: 4);
-            row++;
+            row += plonkDocumentation(2, row, getDocumentation(field, helpProcessor), min1: true);
         }
         // ### All other non-positional parameters
         else
         {
             table.SetCell(0, row, field.GetOrderedOptionAttributeNames().Where(o => !o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(", "), noWrap: true);
             table.SetCell(1, row, field.GetOrderedOptionAttributeNames().Where(o => o.StartsWith("--")).OrderBy(cmd => cmd.Length).Select(cmd => cmd.Color(CmdLineColor.Option)).JoinColoredString(Environment.NewLine), noWrap: true);
-            table.SetCell(2, row, getDocumentation(field, helpProcessor), colSpan: 4);
-            row++;
+            row += plonkDocumentation(2, row, getDocumentation(field, helpProcessor), min1: true);
         }
         return anyCommandsWithSuboptions;
     }
@@ -806,8 +811,8 @@ public static class CommandLineParser
         }
     }
 
-    private static ConsoleColoredString getDocumentation(MemberInfo member, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor) =>
-        member.IsDefined<DocumentationAttribute>() ? helpProcessor(member.GetCustomAttributes<DocumentationAttribute>().Select(d => d.Text ?? "").First()) : "";
+    private static ConsoleColoredString[][] getDocumentation(MemberInfo member, Func<ConsoleColoredString, ConsoleColoredString> helpProcessor) =>
+        member.GetCustomAttributes<DocumentationAttribute>().Select(doc => doc.Texts.Select(helpProcessor).ToArray() ?? []).ToArray();
 
     #region Post-build step check
 
@@ -1049,12 +1054,12 @@ public static class CommandLineParser
             return;
 
         var attr = member.GetCustomAttributes<DocumentationAttribute>().FirstOrDefault();
-        ConsoleColoredString toCheck = null;
+        ConsoleColoredString[] toCheck = null;
         if (attr != null)
         {
             try
             {
-                toCheck = attr.Text; // this property can throw the first time it's accessed
+                toCheck = attr.Texts; // this property can throw the first time it's accessed
             }
             catch (Exception e)
             {

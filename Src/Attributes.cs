@@ -65,24 +65,25 @@ public sealed class CommandGroupAttribute : Attribute
 }
 
 /// <summary>
-///     Use this attribute to link a command-line option or command with the help text that describes (documents) it. Suitable
-///     for single-language applications only. See Remarks.</summary>
+///     Use this attribute to write the help text that describes (documents) a command-line option or command. Specifying
+///     multiple strings will create multiple columns in the table. See Remarks.</summary>
 /// <remarks>
 ///     This attribute specifies the documentation in plain text. All characters are printed exactly as specified. You may
 ///     wish to use <see cref="DocumentationRhoMLAttribute"/> to specify documentation with special markup for
 ///     command-line-related concepts, as well as <see cref="DocumentationEggsMLAttribute"/> for an alternative markup
 ///     language without command-line specific concepts.</remarks>
-[AttributeUsage(AttributeTargets.Field | AttributeTargets.Class | AttributeTargets.Method, Inherited = false, AllowMultiple = false), RummageKeepUsersReflectionSafe]
-public class DocumentationAttribute(string documentation) : Attribute
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Class | AttributeTargets.Method, Inherited = false, AllowMultiple = true), RummageKeepUsersReflectionSafe]
+public class DocumentationAttribute(params string[] documentation) : Attribute
 {
     /// <summary>
-    ///     Gets the console-colored documentation string. Note that this property may throw if the text couldn't be parsed
-    ///     where applicable.</summary>
-    public virtual ConsoleColoredString Text => OriginalText;
+    ///     Gets the console-colored documentation string. Multiple strings may be returned to create multiple columns. Note
+    ///     that this property may throw if the text couldn't be parsed where applicable.</summary>
+    public virtual ConsoleColoredString[] Texts => _converted ??= OriginalTexts.Select(s => (ConsoleColoredString) s).ToArray();
+    private ConsoleColoredString[] _converted;
     /// <summary>Gets a string describing the documentation format to the programmer (not seen by the users).</summary>
     public virtual string OriginalFormat => "Plain text";
     /// <summary>Gets the original documentation string exactly as specified in the attribute.</summary>
-    public string OriginalText { get; private set; } = documentation;
+    public string[] OriginalTexts { get; private set; } = documentation;
 }
 
 /// <summary>
@@ -94,27 +95,29 @@ public class DocumentationLiteralAttribute(string documentation) : Documentation
 }
 
 /// <summary>
-///     Use this attribute to link a command-line option or command with the help text that describes (documents) it. Suitable
-///     for single-language applications only. The documentation is to be specified in <see cref="EggsML"/>, which is
-///     interpreted as described in <see cref="CommandLineParser.Colorize(EggsNode)"/>. See also <see
-///     cref="DocumentationRhoMLAttribute"/> and <see cref="DocumentationAttribute"/>.</summary>
-[AttributeUsage(AttributeTargets.Field | AttributeTargets.Class | AttributeTargets.Method, Inherited = false, AllowMultiple = false), RummageKeepUsersReflectionSafe]
-public class DocumentationEggsMLAttribute(string documentation) : DocumentationAttribute(documentation)
+///     Use this attribute to write the help text that describes (documents) a command-line option or command. Specifying
+///     multiple strings will create multiple columns in the table. The documentation is to be specified in <see
+///     cref="EggsML"/>, which is interpreted as described in <see cref="CommandLineParser.Colorize(EggsNode)"/>.</summary>
+/// <seealso cref="DocumentationAttribute"/>
+/// <seealso cref="DocumentationRhoMLAttribute"/>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Class | AttributeTargets.Method, Inherited = false, AllowMultiple = true), RummageKeepUsersReflectionSafe]
+public class DocumentationEggsMLAttribute(params string[] documentation) : DocumentationAttribute(documentation)
 {
     /// <summary>Gets a string describing the documentation format to the programmer (not seen by the users).</summary>
     public override string OriginalFormat => "EggsML";
     /// <summary>
     ///     Gets the console-colored documentation string. Note that this property may throw if the text couldn't be parsed
     ///     where applicable.</summary>
-    public override ConsoleColoredString Text => _parsed ??= CommandLineParser.Colorize(EggsML.Parse(OriginalText));
-    private ConsoleColoredString _parsed;
+    public override ConsoleColoredString[] Texts => _parsed ??= OriginalTexts.Select(text => CommandLineParser.Colorize(EggsML.Parse(text))).ToArray();
+    private ConsoleColoredString[] _parsed;
 }
 
 /// <summary>
-///     Use this attribute to link a command-line option or command with the help text that describes (documents) it. Suitable
-///     for single-language applications only. The documentation is to be specified in <see cref="RhoML"/>, which is
-///     interpreted as described in <see cref="CommandLineParser.Colorize(RhoElement)"/>. See also <see
-///     cref="DocumentationAttribute"/>.</summary>
+///     Use this attribute to write the help text that describes (documents) a command-line option or command. Specifying
+///     multiple strings will create multiple columns in the table. The documentation is to be specified in <see
+///     cref="RhoML"/>, which is interpreted as described in <see cref="CommandLineParser.Colorize(RhoElement)"/>.</summary>
+/// <seealso cref="DocumentationAttribute"/>
+/// <seealso cref="DocumentationEggsMLAttribute"/>
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Class | AttributeTargets.Method, Inherited = false, AllowMultiple = false), RummageKeepUsersReflectionSafe]
 public class DocumentationRhoMLAttribute(string documentation) : DocumentationAttribute(documentation)
 {
@@ -123,8 +126,8 @@ public class DocumentationRhoMLAttribute(string documentation) : DocumentationAt
     /// <summary>
     ///     Gets the console-colored documentation string. Note that this property may throw if the text couldn't be parsed
     ///     where applicable.</summary>
-    public override ConsoleColoredString Text => _parsed ??= CommandLineParser.Colorize(RhoML.Parse(OriginalText));
-    private ConsoleColoredString _parsed;
+    public override ConsoleColoredString[] Texts => _parsed ??= OriginalTexts.Select(text => CommandLineParser.Colorize(RhoML.Parse(text))).ToArray();
+    private ConsoleColoredString[] _parsed;
 }
 
 /// <summary>
