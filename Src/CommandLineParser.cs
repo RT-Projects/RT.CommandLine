@@ -592,7 +592,7 @@ public static class CommandLineParser
             var helpString = new List<ConsoleColoredString>();
             var commandNameAttr = type.GetCustomAttributes<CommandNameAttribute>().FirstOrDefault();
             string commandName = commandNameAttr == null ? Process.GetCurrentProcess().ProcessName : "... " + commandNameAttr.Names.OrderByDescending(c => c.Length).First();
-            var fmtOpt = type.GetCustomAttribute<HelpScreenFormattingAttribute>();
+            var fmtOpt = type.GetCustomAttribute<HelpScreenFormattingAttribute>() ?? new HelpScreenFormattingAttribute();
 
             //
             //  ##  CONSTRUCT THE “USAGE” LINE
