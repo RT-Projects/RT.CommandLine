@@ -589,11 +589,10 @@ public static class CommandLineParser
         helpProcessor ??= (s => s);
         return wrapWidth =>
         {
-            int leftMargin = 3;
-
             var helpString = new List<ConsoleColoredString>();
             var commandNameAttr = type.GetCustomAttributes<CommandNameAttribute>().FirstOrDefault();
             string commandName = commandNameAttr == null ? Process.GetCurrentProcess().ProcessName : "... " + commandNameAttr.Names.OrderByDescending(c => c.Length).First();
+            var fmtOpt = type.GetCustomAttribute<HelpScreenFormattingAttribute>();
 
             //
             //  ##  CONSTRUCT THE “USAGE” LINE
@@ -651,7 +650,7 @@ public static class CommandLineParser
                 var section = field.GetCustomAttribute<SectionAttribute>();
                 if (curTable == null || lastMandatory != mandatory || section != null)
                 {
-                    curTable = new TextTable { MaxWidth = wrapWidth - leftMargin, ColumnSpacing = 3, RowSpacing = 1, LeftMargin = leftMargin };
+                    curTable = new TextTable { MaxWidth = wrapWidth - fmtOpt.LeftMargin, ColumnSpacing = fmtOpt.ColumnSpacing, RowSpacing = fmtOpt.RowSpacing, LeftMargin = fmtOpt.LeftMargin };
                     paramsTables.Add((section?.Heading ?? $"{(mandatory ? "Required" : "Optional")} parameters:", curTable));
                     curRow = 0;
                 }
@@ -661,10 +660,11 @@ public static class CommandLineParser
 
             foreach (var (heading, table) in paramsTables)
             {
-                helpString.Add(ConsoleColoredString.NewLine);
+                for (var i = 0; i < fmtOpt.BlankLinesBeforeSection; i++)
+                    helpString.Add(ConsoleColoredString.NewLine);
                 helpString.Add(new ConsoleColoredString(heading, CmdLineColor.HelpHeading));
-                helpString.Add(ConsoleColoredString.NewLine);
-                helpString.Add(ConsoleColoredString.NewLine);
+                for (var i = -1; i < fmtOpt.BlankLinesAfterSection; i++)
+                    helpString.Add(ConsoleColoredString.NewLine);
                 table.RemoveEmptyColumns();
                 helpString.Add(table.ToColoredString());
             }
@@ -680,7 +680,7 @@ public static class CommandLineParser
                 }
             }
 
-            return new ConsoleColoredString(helpString.ToArray());
+            return new ConsoleColoredString(helpString);
         };
     }
 

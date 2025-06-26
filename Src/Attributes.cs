@@ -142,3 +142,21 @@ public sealed class SectionAttribute(string heading) : Attribute
     /// <summary>Specifies the section heading.</summary>
     public string Heading { get; private set; } = heading;
 }
+
+/// <summary>
+///     Optionally use this on a class containing command-line options (either the main class or a class representing a
+///     subcommand) to specify some formatting parameters for the help screen.</summary>
+[AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false), RummageKeepUsersReflectionSafe]
+public sealed class HelpScreenFormattingAttribute : Attribute
+{
+    /// <summary>Specifies the amount of horizontal separation between the columns in the table(s).</summary>
+    public int ColumnSpacing { get; set; } = 3;
+    /// <summary>Specifies the amount of blank lines between the rows in the table(s).</summary>
+    public int RowSpacing { get; set; } = 1;
+    /// <summary>Specifies the amount of blank lines before a section header.</summary>
+    public int BlankLinesBeforeSection { get; set; } = 1;
+    /// <summary>Specifies the amount of blank lines after a section header.</summary>
+    public int BlankLinesAfterSection { get; set; } = 1;
+    /// <summary>Specifies the amount of margin to the left of the table(s).</summary>
+    public int LeftMargin { get; set; } = 3;
+}
