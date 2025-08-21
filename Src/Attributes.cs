@@ -147,6 +147,17 @@ public sealed class SectionAttribute(string heading) : Attribute
 }
 
 /// <summary>
+///     Adds a section header on the help screen above the option or parameter that has this attribute. The section heading is
+///     to be specified in <see cref="EggsML"/>, which is interpreted as described in <see
+///     cref="CommandLineParser.Colorize(EggsNode)"/>.</summary>
+[AttributeUsage(AttributeTargets.Field, Inherited = false, AllowMultiple = true)]
+public sealed class SectionEggsMLAttribute(string heading) : Attribute
+{
+    /// <summary>Specifies the section heading.</summary>
+    public string Heading { get; private set; } = heading;
+}
+
+/// <summary>
 ///     Optionally use this on a class containing command-line options (either the main class or a class representing a
 ///     subcommand) to specify some formatting parameters for the help screen.</summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false), RummageKeepUsersReflectionSafe]

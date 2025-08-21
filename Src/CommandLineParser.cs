@@ -644,7 +644,7 @@ public static class CommandLineParser
             //
 
             var anyCommandsWithSuboptions = false;
-            var paramsTables = new List<(string heading, TextTable table)>();
+            var paramsTables = new List<(ConsoleColoredString heading, TextTable table)>();
             TextTable curTable = null;
             var curRow = 0;
             var lastMandatory = false;
@@ -653,11 +653,13 @@ public static class CommandLineParser
                 .Concat(optionalPositional.Select(fld => (mandatory: false, positional: true, field: fld)))
                 .Concat(optionalOptions.Select(fld => (mandatory: false, positional: false, field: fld))))
             {
-                var section = field.GetCustomAttribute<SectionAttribute>();
-                if (curTable == null || lastMandatory != mandatory || section != null)
+                var sectionHeading = (
+                    field.GetCustomAttribute<SectionAttribute>() is { } sec ? sec.Heading.Color(CmdLineColor.HelpHeading) :
+                    field.GetCustomAttribute<SectionEggsMLAttribute>() is { } egg ? Colorize(EggsML.Parse(egg.Heading)) : null);
+                if (curTable == null || lastMandatory != mandatory || sectionHeading != null)
                 {
                     curTable = new TextTable { MaxWidth = wrapWidth - fmtOpt.LeftMargin, ColumnSpacing = fmtOpt.ColumnSpacing, RowSpacing = fmtOpt.RowSpacing, LeftMargin = fmtOpt.LeftMargin, StretchLastCell = true };
-                    paramsTables.Add((section?.Heading ?? $"{(mandatory ? "Required" : "Optional")} parameters:", curTable));
+                    paramsTables.Add((sectionHeading ?? $"{(mandatory ? "Required" : "Optional")} parameters:".Color(CmdLineColor.HelpHeading), curTable));
                     curRow = 0;
                 }
                 anyCommandsWithSuboptions |= createParameterHelpRow(ref curRow, curTable, field, positional, helpProcessor);
@@ -668,7 +670,7 @@ public static class CommandLineParser
             {
                 for (var i = 0; i < fmtOpt.BlankLinesBeforeSection; i++)
                     helpString.Add(ConsoleColoredString.NewLine);
-                helpString.Add(new ConsoleColoredString(heading, CmdLineColor.HelpHeading));
+                helpString.Add(heading);
                 for (var i = -1; i < fmtOpt.BlankLinesAfterSection; i++)
                     helpString.Add(ConsoleColoredString.NewLine);
                 table.RemoveEmptyColumns();
